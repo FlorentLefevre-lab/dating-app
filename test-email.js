@@ -4,14 +4,9 @@ const config = {
   EMAIL_SERVER_HOST: 'smtp.gmail.com',
   EMAIL_SERVER_PORT: 587,
   EMAIL_SERVER_USER: 'lefevre.florent@gmail.com',
-  EMAIL_SERVER_PASSWORD: 'ptexazwshvxfneti',  // Sans espaces
-  EMAIL_FROM: 'lefevre.florent@gmail.com'     // Même email que USER
+  EMAIL_SERVER_PASSWORD: 'luvxjaopaeiggwuf',
+  EMAIL_FROM: 'lefevre.florent@gmail.com'
 }
-
-console.log('🧪 Test direct Gmail (version corrigée)')
-console.log('Host:', config.EMAIL_SERVER_HOST)
-console.log('User:', config.EMAIL_SERVER_USER)
-console.log('From:', config.EMAIL_FROM)
 
 const transporter = nodemailer.createTransport({
   host: config.EMAIL_SERVER_HOST,
@@ -23,21 +18,23 @@ const transporter = nodemailer.createTransport({
   },
 })
 
-async function testEmail() {
+async function testVerificationEmail() {
   try {
     const info = await transporter.sendMail({
       from: config.EMAIL_FROM,
-      to: 'florent.lefevre3@free.fr',
-      subject: '🧪 Test Gmail corrigé - LoveApp',
-      html: '<h1>Test version corrigée</h1><p>Email envoyé depuis lefevre.florent@gmail.com</p>',
+      to: 'gaia.motiondesign@gmail.com',
+      subject: '📧 Test vérification email - LoveApp',
+      html: `
+        <h1>Test email de vérification</h1>
+        <p>Si vous recevez ceci, l'envoi d'email de vérification fonctionne !</p>
+        <a href="http://localhost:3000/auth/verify-email?token=test123">Lien de test</a>
+      `,
     })
 
-    console.log('✅ Email envoyé:', info.messageId)
-    console.log('📧 Response:', info.response)
+    console.log('✅ Email de vérification envoyé:', info.messageId)
   } catch (error) {
     console.error('❌ Erreur:', error.message)
-    console.error('Code d\'erreur:', error.code)
   }
 }
 
-testEmail()
+testVerificationEmail()

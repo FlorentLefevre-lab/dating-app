@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useRouter } from 'next/navigation'
 import { signIn } from 'next-auth/react'
+import Link from 'next/link'
 
 const registerSchema = z.object({
   name: z.string().min(2, "Le nom doit contenir au moins 2 caractères"),
@@ -22,6 +23,8 @@ export default function RegisterForm() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const [message, setMessage] = useState<string | null>(null)
+  const [emailSent, setEmailSent] = useState(false)
   const router = useRouter()
 
   const {
@@ -37,6 +40,8 @@ export default function RegisterForm() {
     setError(null)
 
     try {
+      console.log('📝 Inscription en cours...', { email: data.email, name: data.name })
+      
       const response = await fetch('/api/auth/register', {
         method: 'POST',
         headers: {
@@ -50,27 +55,21 @@ export default function RegisterForm() {
       })
 
       const result = await response.json()
+      console.log('📧 Résultat inscription:', result)
 
       if (!response.ok) {
         throw new Error(result.error || 'Erreur lors de l\'inscription')
       }
 
+      // Inscription réussie - afficher le message de vérification
       setSuccess(true)
+      setMessage(result.message)
+      setEmailSent(result.emailSent)
       
-      // Connexion automatique après inscription
-      const signInResult = await signIn('credentials', {
-        email: data.email,
-        password: data.password,
-        redirect: false,
-      })
-
-      if (signInResult?.ok) {
-        router.push('/profile')
-      } else {
-        router.push('/auth/login')
-      }
+      // NE PAS faire de connexion automatique - l'utilisateur doit vérifier son email d'abord
 
     } catch (error) {
+      console.error('💥 Erreur inscription:', error)
       setError(error instanceof Error ? error.message : 'Une erreur est survenue')
     } finally {
       setIsLoading(false)
@@ -88,16 +87,50 @@ export default function RegisterForm() {
     }
   }
 
+  // Affichage après inscription réussie
   if (success) {
     return (
       <div className="max-w-md mx-auto mt-8 p-6 bg-white rounded-lg shadow-md text-center">
-        <div className="text-green-600 text-5xl mb-4">✓</div>
-        <h2 className="text-xl font-semibold text-gray-900 mb-2">
+        <div className="text-green-600 text-5xl mb-4">📧</div>
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">
           Inscription réussie !
         </h2>
-        <p className="text-gray-600">
-          Redirection en cours...
+        <p className="text-gray-600 mb-4">
+          {message || "Compte créé avec succès ! Vérifiez votre email pour activer votre compte."}
         </p>
+        
+        {emailSent ? (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+            <p className="text-blue-800 text-sm">
+              📬 Un email de vérification a été envoyé !
+            </p>
+          </div>
+        ) : (
+          <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-4">
+            <p className="text-orange-800 text-sm">
+              ⚠️ Problème d'envoi d'email. Contactez le support si nécessaire.
+            </p>
+          </div>
+        )}
+        
+        <p className="text-sm text-gray-500 mb-6">
+          Vérifiez votre boîte email et vos spams. Cliquez sur le lien de vérification pour activer votre compte.
+        </p>
+        
+        <div className="space-y-3">
+          <Link
+            href="/auth/login"
+            className="block w-full bg-pink-600 text-white py-2 px-4 rounded-md hover:bg-pink-700"
+          >
+            Aller à la connexion
+          </Link>
+          <Link
+            href="/auth/resend-verification"
+            className="block w-full bg-gray-200 text-gray-800 py-2 px-4 rounded-md hover:bg-gray-300"
+          >
+            Renvoyer l'email de vérification
+          </Link>
+        </div>
       </div>
     )
   }
@@ -226,9 +259,9 @@ export default function RegisterForm() {
       {/* Lien vers la connexion */}
       <p className="mt-6 text-center text-sm text-gray-600">
         Déjà un compte ?{' '}
-        <a href="/auth/login" className="text-pink-600 hover:text-pink-500">
+        <Link href="/auth/login" className="text-pink-600 hover:text-pink-500">
           Se connecter
-        </a>
+        </Link>
       </p>
     </div>
   )

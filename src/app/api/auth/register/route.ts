@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/db'
+import { sendEmailVerification } from '@/lib/email'
+import crypto from 'crypto'
 import { z } from 'zod'
 
 const registerSchema = z.object({
@@ -10,9 +12,14 @@ const registerSchema = z.object({
 })
 
 export async function POST(request: NextRequest) {
+  console.log('🔥 API register appelée avec vérification email')
+  
   try {
     const body = await request.json()
+    console.log('📨 Body reçu:', body)
+    
     const { name, email, password } = registerSchema.parse(body)
+    console.log('✅ Données validées:', { name, email })
 
     // Vérifier si l'utilisateur existe déjà
     const existingUser = await prisma.user.findUnique({
@@ -28,25 +35,58 @@ export async function POST(request: NextRequest) {
 
     // Hacher le mot de passe
     const hashedPassword = await bcrypt.hash(password, 12)
+    console.log('🔐 Mot de passe haché')
 
-    // Créer l'utilisateur
+    // Créer l'utilisateur (emailVerified = null = non vérifié)
     const user = await prisma.user.create({
       data: {
         name,
         email,
         hashedPassword,
+        primaryAuthMethod: 'EMAIL_PASSWORD',
+        emailVerified: null, // Pas encore vérifié
       }
     })
+    console.log('✅ Utilisateur créé:', user.id)
+
+    // Générer un token de vérification
+    const verificationToken = crypto.randomBytes(32).toString('hex')
+    const expires = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 heures
+    console.log('🔑 Token généré:', verificationToken.substring(0, 8) + '...')
+
+    // Enregistrer le token
+    const tokenCreated = await prisma.emailVerificationToken.create({
+      data: {
+        email,
+        token: verificationToken,
+        expires,
+      }
+    })
+    console.log('💾 Token enregistré en base:', tokenCreated.id)
+
+    // Envoyer l'email de vérification
+    console.log('📧 Envoi de l\'email de vérification...')
+    const emailSent = await sendEmailVerification(email, verificationToken)
+    console.log('📬 Email envoyé:', emailSent)
+
+    if (!emailSent) {
+      console.error('❌ Erreur envoi email vérification pour:', email)
+      // On ne fait pas échouer l'inscription pour ça
+    }
 
     // Retourner l'utilisateur sans le mot de passe
     const { hashedPassword: _, ...userWithoutPassword } = user
 
     return NextResponse.json({
-      message: "Utilisateur créé avec succès",
-      user: userWithoutPassword
+      message: "Compte créé avec succès ! Vérifiez votre email pour activer votre compte.",
+      user: userWithoutPassword,
+      emailSent,
+      tokenId: tokenCreated.id // Pour debug
     })
 
   } catch (error) {
+    console.error('💥 ERREUR dans register:', error)
+    
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         { error: error.errors[0].message },
@@ -54,7 +94,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.error("Erreur lors de l'inscription:", error)
     return NextResponse.json(
       { error: "Erreur interne du serveur" },
       { status: 500 }

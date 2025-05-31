@@ -89,26 +89,33 @@ export const authOptions: NextAuthOptions = {
   },
 
   callbacks: {
-    async jwt({ token, user, account }) {
-      if (user) {
-        token.id = user.id
-      }
-      
-      // Ajouter des infos spécifiques selon le provider
-      if (account) {
-        token.provider = account.provider
-      }
-      
-      return token
-    },
-
-    async session({ session, token }) {
-      if (token) {
-        session.user.id = token.id as string
-        session.user.provider = token.provider as string
-      }
-      return session
-    },
+      async jwt({ token, user, account }) {
+        if (user) {
+          token.id = user.id
+          
+          // Récupérer les infos complètes de l'utilisateur depuis la base
+          const dbUser = await prisma.user.findUnique({
+            where: { id: user.id }
+          })
+          
+          token.emailVerified = dbUser?.emailVerified
+        }
+        
+        if (account) {
+          token.provider = account.provider
+        }
+        
+        return token
+      },
+    
+      async session({ session, token }) {
+        if (token) {
+          session.user.id = token.id as string
+          session.user.provider = token.provider as string
+          session.user.emailVerified = token.emailVerified as Date | null
+        }
+        return session
+      },
 
     async signIn({ user, account, profile }) {
       // Logique personnalisée lors de la connexion
