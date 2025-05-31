@@ -278,7 +278,7 @@ const ProfileManager: React.FC = () => {
     if (profile.age) completed++;
     if (profile.bio) completed++;
     if (profile.location) completed++;
-    if (profile.interests.length > 0) completed++;
+    if (profile?.interests?.length > 0) completed++;
     if (photos.length > 0) completed++;
     
     return Math.round((completed / total) * 100);
@@ -425,7 +425,7 @@ const ProfileManager: React.FC = () => {
                       </div>
                       <div>
                         <div className="text-2xl font-bold text-blue-600">
-                          {profile?.interests.length || 0}
+                          { profile?.interests?.length > 0 || 0}
                         </div>
                         <div className="text-sm text-gray-500">Intérêts</div>
                       </div>
