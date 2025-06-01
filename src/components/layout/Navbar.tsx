@@ -1,91 +1,93 @@
-'use client'
-import { useSession } from 'next-auth/react'
-import Link from 'next/link'
-import LogoutButton from '@/components/auth/LogoutButton'
-import Image from 'next/image'
+// src/components/layout/Navbar.tsx
+'use client';
 
-export default function Navbar() {
-  const { data: session, status } = useSession()
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { 
+  HeartIcon, 
+  ChatBubbleLeftRightIcon, 
+  UserIcon,
+  MagnifyingGlassIcon,
+  Cog6ToothIcon 
+} from '@heroicons/react/24/outline';
+import { 
+  HeartIcon as HeartSolid, 
+  ChatBubbleLeftRightIcon as ChatSolid, 
+  UserIcon as UserSolid,
+  MagnifyingGlassIcon as SearchSolid,
+  Cog6ToothIcon as CogSolid 
+} from '@heroicons/react/24/solid';
+
+const Navbar = () => {
+  const pathname = usePathname();
+
+  const navItems = [
+    {
+      href: '/discover',
+      label: 'Découvrir',
+      icon: MagnifyingGlassIcon,
+      activeIcon: SearchSolid,
+      color: 'text-pink-500'
+    },
+    {
+      href: '/matches',
+      label: 'Matches',
+      icon: HeartIcon,
+      activeIcon: HeartSolid,
+      color: 'text-red-500'
+    },
+    {
+      href: '/chat',
+      label: 'Messages',
+      icon: ChatBubbleLeftRightIcon,
+      activeIcon: ChatSolid,
+      color: 'text-blue-500'
+    },
+    {
+      href: '/profile',
+      label: 'Profil',
+      icon: UserIcon,
+      activeIcon: UserSolid,
+      color: 'text-purple-500'
+    }
+  ];
 
   return (
-    <nav className="bg-white shadow-sm border-b">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16">
-          {/* Logo */}
-          <div className="flex items-center">
-            <Link href="/" className="text-2xl font-bold text-pink-600">
-              💕 Flow Dating
-            </Link>
-          </div>
-
-          {/* Navigation */}
-          <div className="flex items-center space-x-4">
-            {status === 'loading' ? (
-              <div className="animate-pulse">
-                <div className="h-8 w-20 bg-gray-200 rounded"></div>
-              </div>
-            ) : session ? (
-              // Utilisateur connecté
-              <div className="flex items-center space-x-4">
-                <Link
-                  href="/discover"
-                  className="text-gray-700 hover:text-pink-600 px-3 py-2 rounded-md"
-                >
-                  Découvrir
-                </Link>
-                <Link
-                  href="/matches"
-                  className="text-gray-700 hover:text-pink-600 px-3 py-2 rounded-md"
-                >
-                  Mes Matches
-                </Link>
-                <Link
-                  href="/chat"
-                  className="text-gray-700 hover:text-pink-600 px-3 py-2 rounded-md"
-                >
-                  Messages
-                </Link>
+    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-4 py-2 z-50">
+      <div className="max-w-md mx-auto">
+        <div className="flex justify-around items-center">
+          {navItems.map((item) => {
+            const isActive = pathname === item.href;
+            const Icon = isActive ? item.activeIcon : item.icon;
+            
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex flex-col items-center py-2 px-3 rounded-lg transition-all duration-200 ${
+                  isActive 
+                    ? `${item.color} bg-gray-50 scale-110` 
+                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                <Icon className="w-6 h-6 mb-1" />
+                <span className={`text-xs font-medium ${
+                  isActive ? 'font-semibold' : ''
+                }`}>
+                  {item.label}
+                </span>
                 
-                {/* Profile dropdown */}
-                {/* <div className="flex items-center space-x-2">
-                  <Link href="/profile" className="flex items-center space-x-2">
-                    <Image
-                      src={session.user?.image || '/default-avatar.jpg'}
-                      alt="Profile"
-                      width={32}
-                      height={32}
-                      className="rounded-full"
-                    />
-                    <span className="text-gray-700 font-medium">
-                      {session.user?.name}
-                    </span>
-                  </Link>
-                </div> */}
-
-                  <LogoutButton className="ml-4 bg-gray-600 text-white px-3 py-1 rounded-md hover:bg-gray-700 text-sm">
-                    Déconnexion
-                  </LogoutButton>
-              </div>
-            ) : (
-              // Utilisateur non connecté
-              <div className="flex items-center space-x-4">
-                <Link
-                  href="/auth/login"
-                  className="text-gray-700 hover:text-pink-600 px-3 py-2 rounded-md"
-                >
-                  Se connecter
-                </Link>
-                <Link
-                  href="/auth/register"
-                  className="bg-pink-600 text-white px-4 py-2 rounded-md hover:bg-pink-700"
-                >
-                  S'inscrire
-                </Link>
-              </div>
-            )}
-          </div>
+                {/* Indicateur actif */}
+                {isActive && (
+                  <div className={`w-1 h-1 rounded-full ${item.color.replace('text-', 'bg-')} mt-1`} />
+                )}
+              </Link>
+            );
+          })}
         </div>
       </div>
     </nav>
-  )
-}
+  );
+};
+
+export default Navbar;

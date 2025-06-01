@@ -1,9 +1,10 @@
 // components/profile/PersonalInfoForm.tsx
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { motion } from 'framer-motion';
 import { z } from 'zod';
+import { TagIcon, CheckIcon } from '@heroicons/react/24/outline';
 import { UserProfile } from '../../types/profiles'; 
 import { 
   GENDERS, 
@@ -22,7 +23,8 @@ const personalInfoSchema = z.object({
   zodiacSign: z.string().optional().nullable(),
   dietType: z.string().optional().nullable(),
   religion: z.string().optional().nullable(),
-  ethnicity: z.string().optional().nullable()
+  ethnicity: z.string().optional().nullable(),
+  interests: z.array(z.string()).optional()
 });
 
 type PersonalInfoFormData = z.infer<typeof personalInfoSchema>;
@@ -49,9 +51,27 @@ const PersonalInfoForm: React.FC<Props> = ({ profile, loading, onSubmit, onCance
       zodiacSign: '',
       dietType: '',
       religion: '',
-      ethnicity: ''
+      ethnicity: '',
+      interests: []
     }
   });
+
+  // État pour les centres d'intérêt
+  const [userInterests, setUserInterests] = useState<string[]>(
+    profile?.interests || []
+  );
+
+  // Options d'intérêts disponibles
+  const interestOptions = [
+    'Sport', 'Fitness', 'Yoga', 'Course', 'Natation', 'Football', 'Tennis',
+    'Voyage', 'Aventure', 'Randonnée', 'Camping', 'Photographie',
+    'Musique', 'Concert', 'Festival', 'Danse', 'Chant',
+    'Lecture', 'Écriture', 'Cinéma', 'Série TV', 'Théâtre', 'Art',
+    'Cuisine', 'Gastronomie', 'Vin', 'Bière',
+    'Technologie', 'Gaming', 'Programmation',
+    'Nature', 'Environnement', 'Jardinage', 'Animaux',
+    'Méditation', 'Bien-être', 'Mode', 'Shopping'
+  ];
 
   useEffect(() => {
     if (profile) {
@@ -62,8 +82,30 @@ const PersonalInfoForm: React.FC<Props> = ({ profile, loading, onSubmit, onCance
       setValue('dietType', profile.dietType || '');
       setValue('religion', profile.religion || '');
       setValue('ethnicity', profile.ethnicity || '');
+      
+      // Charger les intérêts
+      const interests = profile.interests || [];
+      setUserInterests(interests);
+      setValue('interests', interests);
     }
   }, [profile, setValue]);
+
+  // Fonction pour gérer les intérêts
+  const handleInterestToggle = (interest: string) => {
+    const newInterests = userInterests.includes(interest)
+      ? userInterests.filter(i => i !== interest)
+      : [...userInterests, interest];
+    
+    setUserInterests(newInterests);
+    setValue('interests', newInterests);
+  };
+
+  // Fonction de soumission modifiée pour inclure les intérêts
+  const handleFormSubmit = async (data: PersonalInfoFormData) => {
+    console.log('📤 PersonalInfoForm - Données à sauvegarder:', data);
+    console.log('📋 Vérification ethnicity:', data.ethnicity);
+    await onSubmit(data);
+  };
 
   return (
     <div className="p-6">
@@ -71,7 +113,7 @@ const PersonalInfoForm: React.FC<Props> = ({ profile, loading, onSubmit, onCance
         Informations personnelles
       </h2>
       
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+      <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Genre */}
           <div>
@@ -198,6 +240,49 @@ const PersonalInfoForm: React.FC<Props> = ({ profile, loading, onSubmit, onCance
               </option>
             ))}
           </select>
+        </div>
+
+        {/* NOUVELLE SECTION : Centres d'intérêt */}
+        <div className="bg-white rounded-xl p-6 border border-gray-200">
+          <div className="flex items-center gap-3 mb-4">
+            <TagIcon className="w-6 h-6 text-purple-500" />
+            <h3 className="text-lg font-semibold text-gray-800">
+              Mes centres d'intérêt ({userInterests.length})
+            </h3>
+          </div>
+          
+          <p className="text-gray-600 mb-4">
+            Sélectionnez vos centres d'intérêt pour améliorer votre profil et trouver des personnes compatibles
+          </p>
+          
+          <div className="flex flex-wrap gap-2">
+            {interestOptions.map((interest) => {
+              const isSelected = userInterests.includes(interest);
+              return (
+                <button
+                  key={interest}
+                  type="button"
+                  onClick={() => handleInterestToggle(interest)}
+                  className={`px-3 py-2 rounded-full border-2 transition-all text-sm ${
+                    isSelected
+                      ? 'border-purple-500 bg-purple-500 text-white'
+                      : 'border-gray-300 text-gray-700 hover:border-purple-300'
+                  }`}
+                >
+                  {isSelected && <CheckIcon className="w-3 h-3 inline mr-1" />}
+                  {interest}
+                </button>
+              );
+            })}
+          </div>
+          
+          {userInterests.length > 0 && (
+            <div className="mt-4 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+              <p className="text-sm text-purple-700">
+                <span className="font-medium">Vos intérêts :</span> {userInterests.join(', ')}
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">

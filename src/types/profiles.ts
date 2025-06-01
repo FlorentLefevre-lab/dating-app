@@ -12,7 +12,10 @@ export interface Photo {
     email: string;
     age: number | null;
     bio: string | null;
-    location: string | null;
+    location?: string;
+    department?: string;
+    region?: string;
+    postcode?: string;
     interests: string[];
     photos: Photo[];
     gender: string | null;
@@ -23,10 +26,10 @@ export interface Photo {
     religion: string | null;
     ethnicity: string | null;
     preferences?: {
-      minAge: number;
-      maxAge: number;
-      maxDistance: number;
-      genderPreference: string | null;
+    minAge: number;
+    maxAge: number;
+    maxDistance: number;
+    genderPreference: string | null;
     };
     createdAt: string;
     updatedAt: string;

@@ -7,30 +7,20 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Enum pour définir les méthodes d'authentification
-enum AuthMethod {
-  EMAIL_PASSWORD
-  GOOGLE
-  FACEBOOK
-  TWITTER
-  APPLE
-}
-
 model Account {
   id                String  @id @default(cuid())
   userId            String
   type              String
   provider          String
   providerAccountId String
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
+  refresh_token     String?
+  access_token      String?
   expires_at        Int?
   token_type        String?
   scope             String?
-  id_token          String? @db.Text
+  id_token          String?
   session_state     String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
 }
@@ -44,44 +34,42 @@ model Session {
 }
 
 model User {
-  id                  String      @id @default(cuid())
-  name                String?
-  email               String      @unique
-  emailVerified       DateTime?
-  image               String?
-  hashedPassword      String?     // Pour l'authentification par email/password
-  primaryAuthMethod   AuthMethod  @default(EMAIL_PASSWORD) // Méthode de connexion principale avec valeur par défaut
-  
-  // Informations de base
-  age                 Int?
-  bio                 String?     @db.Text
-  location            String?
-  profession          String?     // ← NOUVEAU CHAMP
-  
-  // Informations personnelles
-  gender              String?     // ← NOUVEAU CHAMP
-  maritalStatus       String?     // ← NOUVEAU CHAMP
-  zodiacSign          String?     // ← NOUVEAU CHAMP
-  dietType            String?     // ← NOUVEAU CHAMP
-  religion            String?     // ← NOUVEAU CHAMP
-  
-  // Centres d'intérêt
-  interests           String[]    // Array supporté par PostgreSQL
-  
-  // Relations
-  photos              Photo[]
-  preferences         UserPreferences?
-  
-  accounts            Account[]
-  sessions            Session[]
-  sentLikes           Like[]      @relation("LikeSender")
-  receivedLikes       Like[]      @relation("LikeReceiver")
-  sentMessages        Message[]   @relation("MessageSender")
-  receivedMessages    Message[]   @relation("MessageReceiver")
-  matches             Match[]     @relation("UserMatches")
-  
-  createdAt           DateTime    @default(now())
-  updatedAt           DateTime    @updatedAt
+  id                   String           @id @default(cuid())
+  name                 String?
+  email                String           @unique
+  emailVerified        DateTime?
+  image                String?
+  hashedPassword       String?
+  primaryAuthMethod    AuthMethod       @default(EMAIL_PASSWORD)
+  age                  Int?
+  bio                  String?
+  location             String?
+  profession           String?
+  gender               String?
+  maritalStatus        String?
+  zodiacSign           String?
+  dietType             String?
+  religion             String?
+  interests            String[]
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  department           String?
+  ethnicity            String?
+  postcode             String?
+  region               String?
+  accounts             Account[]
+  receivedLikes        Like[]           @relation("LikeReceiver")
+  sentLikes            Like[]           @relation("LikeSender")
+  receivedMessages     Message[]        @relation("MessageReceiver")
+  sentMessages         Message[]        @relation("MessageSender")
+  photos               Photo[]
+  sessions             Session[]
+  preferences          UserPreferences?
+  receivedDislikes     Dislike[]        @relation("DislikeReceiver")
+  sentDislikes         Dislike[]        @relation("DislikeSender")
+  profileViewsReceived ProfileView[]    @relation("ProfileViewed")
+  profileViewsGiven    ProfileView[]    @relation("ProfileViewer")
+  matches              Match[]          @relation("UserMatches")
 }
 
 model Photo {
@@ -89,51 +77,76 @@ model Photo {
   url       String
   userId    String
   isPrimary Boolean  @default(false)
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model UserPreferences {
-  id           String @id @default(cuid())
-  userId       String @unique
-  minAge       Int    @default(18)
-  maxAge       Int    @default(100)
-  maxDistance  Int    @default(50)
-  gender       String?
-  interests    String[]
-  lookingFor   String?
-  user         User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  minAge      Int      @default(18)
+  maxAge      Int      @default(35)
+  maxDistance Int      @default(50)
+  gender      String?
+  createdAt   DateTime @default(now())
+  lookingFor  String?
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Like {
   id         String   @id @default(cuid())
   senderId   String
   receiverId String
-  sender     User     @relation("LikeSender", fields: [senderId], references: [id], onDelete: Cascade)
-  receiver   User     @relation("LikeReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
   createdAt  DateTime @default(now())
+  receiver   User     @relation("LikeReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  sender     User     @relation("LikeSender", fields: [senderId], references: [id], onDelete: Cascade)
 
   @@unique([senderId, receiverId])
 }
 
+model Dislike {
+  id         String   @id @default(cuid())
+  senderId   String
+  receiverId String
+  createdAt  DateTime @default(now())
+  receiver   User     @relation("DislikeReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  sender     User     @relation("DislikeSender", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@unique([senderId, receiverId])
+  @@map("dislikes")
+}
+
+model ProfileView {
+  id       String   @id @default(cuid())
+  viewerId String
+  viewedId String
+  viewedAt DateTime @default(now())
+  viewed   User     @relation("ProfileViewed", fields: [viewedId], references: [id], onDelete: Cascade)
+  viewer   User     @relation("ProfileViewer", fields: [viewerId], references: [id], onDelete: Cascade)
+
+  @@unique([viewerId, viewedId])
+  @@map("profile_views")
+}
+
 model Match {
   id        String    @id @default(cuid())
-  users     User[]    @relation("UserMatches")
-  messages  Message[]
   createdAt DateTime  @default(now())
+  messages  Message[]
+  users     User[]    @relation("UserMatches")
 }
 
 model Message {
-  id        String   @id @default(cuid())
-  content   String   @db.Text
-  senderId  String
+  id         String    @id @default(cuid())
+  content    String
+  senderId   String
   receiverId String
-  matchId   String
-  sender    User     @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
-  receiver  User     @relation("MessageReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
-  match     Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-  readAt    DateTime?
+  matchId    String
+  createdAt  DateTime  @default(now())
+  readAt     DateTime?
+  match      Match     @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  receiver   User      @relation("MessageReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  sender     User      @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
 }
 
 model EmailVerificationToken {
@@ -162,4 +175,12 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+enum AuthMethod {
+  EMAIL_PASSWORD
+  GOOGLE
+  FACEBOOK
+  TWITTER
+  APPLE
 }

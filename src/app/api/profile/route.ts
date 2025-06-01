@@ -42,19 +42,23 @@ export async function GET(request: NextRequest) {
     console.log('✅ Profil trouvé:', user.id);
     console.log('📸 Photos trouvées:', user.photos.length); // ← Debug
 
-    // Préparer la réponse avec tous les champs + photos
+    // Préparer la réponse avec tous les champs + photos + nouveaux champs de localisation
     const profileData = {
       id: user.id,
       name: user.name || '',
       age: user.age || null,
       bio: user.bio || '',
       location: user.location || '',
+      department: user.department || '',
+      region: user.region || '',
+      postcode: user.postcode || '',
       profession: user.profession || '',
       gender: user.gender || '',
       maritalStatus: user.maritalStatus || '',
       zodiacSign: user.zodiacSign || '',
       dietType: user.dietType || '',
       religion: user.religion || '',
+      ethnicity: user.ethnicity || '',
       interests: user.interests || [],
       preferences: user.preferences,
     };
@@ -140,6 +144,19 @@ export async function PUT(request: NextRequest) {
       updateData.location = String(body.location).trim();
     }
 
+    // NOUVEAUX CHAMPS DE LOCALISATION
+    if (body.department !== undefined && body.department !== null) {
+      updateData.department = String(body.department).trim();
+    }
+
+    if (body.region !== undefined && body.region !== null) {
+      updateData.region = String(body.region).trim();
+    }
+
+    if (body.postcode !== undefined && body.postcode !== null) {
+      updateData.postcode = String(body.postcode).trim();
+    }
+
     if (body.profession !== undefined && body.profession !== null) {
       updateData.profession = String(body.profession).trim();
     }
@@ -164,6 +181,11 @@ export async function PUT(request: NextRequest) {
       updateData.religion = String(body.religion).trim();
     }
 
+    // AJOUT DU CHAMP ETHNICITY
+    if (body.ethnicity !== undefined && body.ethnicity !== null) {
+      updateData.ethnicity = String(body.ethnicity).trim();
+    }
+
     if (body.interests !== undefined && Array.isArray(body.interests)) {
       updateData.interests = body.interests.filter(interest => 
         typeof interest === 'string' && interest.trim().length > 0
@@ -180,19 +202,23 @@ export async function PUT(request: NextRequest) {
 
     console.log('✅ Profil mis à jour avec succès:', updatedUser.id);
 
-    // Retourner les données mises à jour
+    // Retourner les données mises à jour AVEC les nouveaux champs
     const responseData = {
       id: updatedUser.id,
       name: updatedUser.name,
       age: updatedUser.age,
       bio: updatedUser.bio,
       location: updatedUser.location,
+      department: updatedUser.department,
+      region: updatedUser.region,
+      postcode: updatedUser.postcode,
       profession: updatedUser.profession,
       gender: updatedUser.gender,
       maritalStatus: updatedUser.maritalStatus,
       zodiacSign: updatedUser.zodiacSign,
       dietType: updatedUser.dietType,
       religion: updatedUser.religion,
+      ethnicity: updatedUser.ethnicity,
       interests: updatedUser.interests,
     };
 

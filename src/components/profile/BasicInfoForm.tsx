@@ -1,18 +1,22 @@
 // components/profile/BasicInfoForm.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { motion, AnimatePresence } from 'framer-motion';
-import { PlusIcon } from '@heroicons/react/24/outline';
+import { motion } from 'framer-motion';
 import { z } from 'zod';
 import { UserProfile } from '../../types/profiles';
+import { PROFESSIONS } from '../../types/profiles';
+import LocationAutocomplete from '../common/LocationAutoComplete';
 
 const basicInfoSchema = z.object({
   name: z.string().min(1, 'Le nom est requis').max(100, 'Nom trop long'),
   age: z.coerce.number().min(18, 'Âge minimum 18 ans').max(100, 'Âge maximum 100 ans').optional().nullable(),
   bio: z.string().max(500, 'Bio limitée à 500 caractères').optional().nullable(),
   location: z.string().max(100, 'Localisation trop longue').optional().nullable(),
-  interests: z.array(z.string()).max(10, 'Maximum 10 centres d\'intérêt').optional()
+  department: z.string().optional().nullable(),
+  region: z.string().optional().nullable(),
+  postcode: z.string().optional().nullable(),
+  profession: z.string().optional().nullable()
 });
 
 type BasicInfoFormData = z.infer<typeof basicInfoSchema>;
@@ -25,8 +29,6 @@ interface Props {
 }
 
 const BasicInfoForm: React.FC<Props> = ({ profile, loading, onSubmit, onCancel }) => {
-  const [newInterest, setNewInterest] = useState('');
-
   const {
     register,
     handleSubmit,
@@ -40,33 +42,70 @@ const BasicInfoForm: React.FC<Props> = ({ profile, loading, onSubmit, onCancel }
       age: null,
       bio: '',
       location: '',
-      interests: []
+      department: '',
+      region: '',
+      postcode: '',
+      profession: ''
     }
   });
 
-  const interests = watch('interests') || [];
+  const currentLocation = watch('location');
 
   useEffect(() => {
     if (profile) {
+      console.log('📊 Chargement du profil existant:', profile);
       setValue('name', profile.name || '');
       setValue('age', profile.age);
       setValue('bio', profile.bio);
       setValue('location', profile.location);
-      setValue('interests', profile.interests || []);
+      setValue('department', profile.department || '');
+      setValue('region', profile.region || '');
+      setValue('postcode', profile.postcode || '');
+      setValue('profession', profile.profession || '');
+      console.log('✅ Valeurs chargées dans le formulaire');
     }
   }, [profile, setValue]);
 
-  const addInterest = () => {
-    if (newInterest.trim() && !interests.includes(newInterest.trim()) && interests.length < 10) {
-      const newInterests = [...interests, newInterest.trim()];
-      setValue('interests', newInterests);
-      setNewInterest('');
-    }
+  const handleLocationChange = (locationData: any) => {
+    console.log('🗺️ Nouvelle localisation sélectionnée:', locationData);
+    console.log('📍 Avant setValue - Valeurs actuelles du formulaire:', {
+      location: watch('location'),
+      department: watch('department'),
+      region: watch('region'),
+      postcode: watch('postcode')
+    });
+    
+    setValue('location', locationData.fullAddress);
+    setValue('department', locationData.department);
+    setValue('region', locationData.region);
+    setValue('postcode', locationData.postcode);
+    
+    console.log('📝 Après setValue - Nouvelles valeurs:', {
+      location: locationData.fullAddress,
+      department: locationData.department,
+      region: locationData.region,
+      postcode: locationData.postcode
+    });
+    
+    // Vérification immédiate
+    setTimeout(() => {
+      console.log('⏰ Vérification 100ms après setValue:', {
+        location: watch('location'),
+        department: watch('department'),
+        region: watch('region'),
+        postcode: watch('postcode')
+      });
+    }, 100);
   };
 
-  const removeInterest = (interest: string) => {
-    const newInterests = interests.filter(i => i !== interest);
-    setValue('interests', newInterests);
+  const handleFormSubmit = async (data: BasicInfoFormData) => {
+    console.log('📤 Données complètes du formulaire à sauvegarder:', data);
+    try {
+      await onSubmit(data);
+      console.log('✅ Sauvegarde terminée');
+    } catch (error) {
+      console.error('❌ Erreur lors de la sauvegarde:', error);
+    }
   };
 
   return (
@@ -75,7 +114,7 @@ const BasicInfoForm: React.FC<Props> = ({ profile, loading, onSubmit, onCancel }
         Informations de base
       </h2>
       
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+      <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <label className="block text-sm font-medium mb-2 text-gray-700">
@@ -111,12 +150,32 @@ const BasicInfoForm: React.FC<Props> = ({ profile, loading, onSubmit, onCancel }
 
         <div>
           <label className="block text-sm font-medium mb-2 text-gray-700">
+            Profession
+          </label>
+          <select
+            {...register('profession')}
+            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all"
+          >
+            <option value="">Sélectionnez votre profession</option>
+            {PROFESSIONS.map(profession => (
+              <option key={profession.value} value={profession.value}>
+                {profession.label}
+              </option>
+            ))}
+          </select>
+          {errors.profession && (
+            <p className="text-red-500 text-sm mt-1">{errors.profession.message}</p>
+          )}
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-2 text-gray-700">
             Localisation
           </label>
-          <input
-            {...register('location')}
-            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all"
-            placeholder="Ville, Pays"
+          <LocationAutocomplete
+            value={currentLocation || ''}
+            onChange={handleLocationChange}
+            placeholder="Tapez votre ville..."
           />
           {errors.location && (
             <p className="text-red-500 text-sm mt-1">{errors.location.message}</p>
@@ -137,54 +196,6 @@ const BasicInfoForm: React.FC<Props> = ({ profile, loading, onSubmit, onCancel }
           {errors.bio && (
             <p className="text-red-500 text-sm mt-1">{errors.bio.message}</p>
           )}
-        </div>
-
-        {/* Centres d'intérêt */}
-        <div>
-          <label className="block text-sm font-medium mb-2 text-gray-700">
-            Centres d'intérêt ({interests.length}/10)
-          </label>
-          <div className="flex gap-2 mb-3">
-            <input
-              type="text"
-              value={newInterest}
-              onChange={(e) => setNewInterest(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addInterest())}
-              className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all"
-              placeholder="Ajouter un centre d'intérêt"
-              disabled={interests.length >= 10}
-            />
-            <button
-              type="button"
-              onClick={addInterest}
-              disabled={interests.length >= 10}
-              className="px-6 py-3 bg-pink-500 text-white rounded-lg hover:bg-pink-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-            >
-              <PlusIcon className="w-5 h-5" />
-            </button>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <AnimatePresence>
-              {interests.map((interest, index) => (
-                <motion.span
-                  key={index}
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.8 }}
-                  className="inline-flex items-center gap-2 px-3 py-1 bg-pink-100 text-pink-700 rounded-full text-sm"
-                >
-                  {interest}
-                  <button
-                    type="button"
-                    onClick={() => removeInterest(interest)}
-                    className="text-pink-500 hover:text-pink-700 transition-colors"
-                  >
-                    ×
-                  </button>
-                </motion.span>
-              ))}
-            </AnimatePresence>
-          </div>
         </div>
 
         <div className="flex gap-4">

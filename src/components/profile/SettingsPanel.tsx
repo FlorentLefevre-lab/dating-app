@@ -12,9 +12,6 @@ import {
 } from '@heroicons/react/24/outline';
 import { UserProfile, Photo } from  '../../types/profiles';
 
-
-
-
 interface Props {
   profile: UserProfile | null;
   photos: Photo[];
@@ -22,7 +19,12 @@ interface Props {
   onMessage: (message: string, type?: 'success' | 'error') => void;
 }
 
-const SettingsPanel: React.FC<Props> = ({ profile, photos, session, onMessage }) => {
+const SettingsPanel: React.FC<Props> = ({ 
+  profile, 
+  photos, 
+  session, 
+  onMessage
+}) => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState('');
   const [loading, setLoading] = useState(false);

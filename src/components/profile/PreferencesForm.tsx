@@ -6,9 +6,7 @@ import {
   HeartIcon, 
   MapPinIcon, 
   CalendarIcon,
-  UserIcon,
-  TagIcon,
-  CheckIcon
+  UserIcon
 } from '@heroicons/react/24/outline';
 
 interface UserPreferences {
@@ -17,7 +15,6 @@ interface UserPreferences {
   maxAge?: number;
   maxDistance?: number;
   gender?: string;
-  interests?: string[];
   lookingFor?: string;
 }
 
@@ -37,7 +34,6 @@ const PreferencesForm: React.FC<PreferencesFormProps> = ({
     maxAge: 35,
     maxDistance: 50,
     gender: '',
-    interests: [],
     lookingFor: ''
   });
 
@@ -52,7 +48,6 @@ const PreferencesForm: React.FC<PreferencesFormProps> = ({
         maxAge: profile.preferences.maxAge || 35,
         maxDistance: profile.preferences.maxDistance || 50,
         gender: profile.preferences.gender || '',
-        interests: profile.preferences.interests || [],
         lookingFor: profile.preferences.lookingFor || ''
       });
     }
@@ -75,17 +70,6 @@ const PreferencesForm: React.FC<PreferencesFormProps> = ({
     { value: 'pas-sur', label: 'Je ne sais pas encore' }
   ];
 
-  const interestOptions = [
-    'Sport', 'Fitness', 'Yoga', 'Course', 'Natation', 'Football', 'Tennis',
-    'Voyage', 'Aventure', 'Randonnée', 'Camping', 'Photographie',
-    'Musique', 'Concert', 'Festival', 'Danse', 'Chant',
-    'Lecture', 'Écriture', 'Cinéma', 'Série TV', 'Théâtre', 'Art',
-    'Cuisine', 'Gastronomie', 'Vin', 'Bière',
-    'Technologie', 'Gaming', 'Programmation',
-    'Nature', 'Environnement', 'Jardinage', 'Animaux',
-    'Méditation', 'Bien-être', 'Mode', 'Shopping'
-  ];
-
   const distanceOptions = [
     { value: 5, label: '5 km' },
     { value: 10, label: '10 km' },
@@ -100,15 +84,6 @@ const PreferencesForm: React.FC<PreferencesFormProps> = ({
     setFormData(prev => ({
       ...prev,
       [field]: value
-    }));
-  };
-
-  const handleInterestToggle = (interest: string) => {
-    setFormData(prev => ({
-      ...prev,
-      interests: prev.interests?.includes(interest)
-        ? prev.interests.filter(i => i !== interest)
-        : [...(prev.interests || []), interest]
     }));
   };
 
@@ -271,41 +246,6 @@ const PreferencesForm: React.FC<PreferencesFormProps> = ({
         </div>
       </div>
 
-      {/* Centres d'intérêt */}
-      <div className="bg-white rounded-xl p-6 border border-gray-200">
-        <div className="flex items-center gap-3 mb-4">
-          <TagIcon className="w-6 h-6 text-pink-500" />
-          <h3 className="text-lg font-semibold text-gray-800">
-            Centres d'intérêt recherchés ({formData.interests?.length || 0})
-          </h3>
-        </div>
-        
-        <p className="text-gray-600 mb-4">
-          Sélectionnez les centres d'intérêt que vous aimeriez partager
-        </p>
-        
-        <div className="flex flex-wrap gap-2">
-          {interestOptions.map((interest) => {
-            const isSelected = formData.interests?.includes(interest);
-            return (
-              <button
-                key={interest}
-                type="button"
-                onClick={() => handleInterestToggle(interest)}
-                className={`px-4 py-2 rounded-full border-2 transition-all text-sm ${
-                  isSelected
-                    ? 'border-pink-500 bg-pink-500 text-white'
-                    : 'border-gray-300 text-gray-700 hover:border-pink-300'
-                }`}
-              >
-                {isSelected && <CheckIcon className="w-4 h-4 inline mr-1" />}
-                {interest}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
       {/* Boutons d'action */}
       <div className="flex gap-4 pt-6 border-t border-gray-200">
         <button
@@ -350,11 +290,6 @@ const PreferencesForm: React.FC<PreferencesFormProps> = ({
               <span className="font-medium">Type de relation :</span> {
                 lookingForOptions.find(l => l.value === formData.lookingFor)?.label
               }
-            </p>
-          )}
-          {formData.interests && formData.interests.length > 0 && (
-            <p>
-              <span className="font-medium">Intérêts :</span> {formData.interests.join(', ')}
             </p>
           )}
         </div>
