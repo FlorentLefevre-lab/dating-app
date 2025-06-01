@@ -14,7 +14,7 @@ export default function Navbar() {
           {/* Logo */}
           <div className="flex items-center">
             <Link href="/" className="text-2xl font-bold text-pink-600">
-              💕 LoveApp
+              💕 Flow Dating
             </Link>
           </div>
 
@@ -47,7 +47,7 @@ export default function Navbar() {
                 </Link>
                 
                 {/* Profile dropdown */}
-                <div className="flex items-center space-x-2">
+                {/* <div className="flex items-center space-x-2">
                   <Link href="/profile" className="flex items-center space-x-2">
                     <Image
                       src={session.user?.image || '/default-avatar.jpg'}
@@ -60,11 +60,11 @@ export default function Navbar() {
                       {session.user?.name}
                     </span>
                   </Link>
-                  
+                </div> */}
+
                   <LogoutButton className="ml-4 bg-gray-600 text-white px-3 py-1 rounded-md hover:bg-gray-700 text-sm">
                     Déconnexion
                   </LogoutButton>
-                </div>
               </div>
             ) : (
               // Utilisateur non connecté

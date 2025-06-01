@@ -1,3 +1,4 @@
+// lib/auth.ts
 import { NextAuthOptions } from "next-auth"
 import NextAuth from "next-auth"
 import GoogleProvider from "next-auth/providers/google"
@@ -10,7 +11,6 @@ import bcrypt from "bcryptjs"
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   providers: [
-    // 🔥 IMPORTANT: Credentials en premier pour priorité
     CredentialsProvider({
       id: "credentials",
       name: "credentials",
@@ -26,19 +26,16 @@ export const authOptions: NextAuthOptions = {
         }
       },
       async authorize(credentials) {
-        console.log("🔐 Tentative d'authentification avec credentials:", credentials?.email)
+        console.log("🔐 AUTHORIZE APPELÉ avec:", credentials?.email)
         
         if (!credentials?.email || !credentials?.password) {
           console.log("❌ Email ou mot de passe manquant")
-          return null // ⚠️ Retourner null au lieu de throw
+          return null
         }
 
         try {
-          // Rechercher l'utilisateur dans la base
           const user = await prisma.user.findUnique({
-            where: {
-              email: credentials.email
-            }
+            where: { email: credentials.email }
           })
 
           if (!user) {
@@ -51,7 +48,6 @@ export const authOptions: NextAuthOptions = {
             return null
           }
 
-          // Vérifier le mot de passe
           const isPasswordValid = await bcrypt.compare(
             credentials.password,
             user.hashedPassword
@@ -100,31 +96,21 @@ export const authOptions: NextAuthOptions = {
   },
 
   callbacks: {
-    // 🔥 JWT CALLBACK SIMPLIFIÉ
     async jwt({ token, user, account }) {
-      // Première connexion : ajouter les infos user au token
       if (user) {
         token.id = user.id
         token.provider = account?.provider || "credentials"
         
-        // Récupérer emailVerified seulement si nécessaire
-        if (account?.provider !== "credentials") {
-          try {
-            const dbUser = await prisma.user.findUnique({
-              where: { id: user.id },
-              select: { emailVerified: true }
-            })
-            token.emailVerified = dbUser?.emailVerified
-          } catch (error) {
-            console.error("Erreur récupération emailVerified:", error)
-          }
-        }
+        const dbUser = await prisma.user.findUnique({
+          where: { id: user.id },
+          select: { emailVerified: true }
+        })
+        token.emailVerified = dbUser?.emailVerified
       }
       
       return token
     },
 
-    // 🔥 SESSION CALLBACK SIMPLIFIÉ
     async session({ session, token }) {
       if (token) {
         session.user.id = token.id as string
@@ -135,24 +121,20 @@ export const authOptions: NextAuthOptions = {
       return session
     },
 
-    // 🔥 SIGNIN CALLBACK SIMPLIFIÉ
     async signIn({ user, account, profile }) {
       console.log(`🔑 Tentative de connexion: ${user.email} via ${account?.provider}`)
       
-      // Pour les providers OAuth, vérifier si l'utilisateur existe
       if (account?.provider === "google" || account?.provider === "facebook") {
         try {
           const existingUser = await prisma.user.findUnique({
             where: { email: user.email! }
           })
 
-          // Si l'utilisateur n'existe pas, empêcher la création automatique
           if (!existingUser) {
             console.log("❌ Tentative de création de compte OAuth bloquée:", user.email)
             return `/auth/error?error=OAuthAccountNotLinked&email=${encodeURIComponent(user.email!)}`
           }
 
-          // Lier le compte social si pas déjà fait
           const existingAccount = await prisma.account.findFirst({
             where: {
               provider: account.provider,
@@ -186,22 +168,40 @@ export const authOptions: NextAuthOptions = {
       return true
     },
 
-    // 🔥 REDIRECT CALLBACK SIMPLIFIÉ
+    // 🔥 MODIFIÉ: Redirection vers dashboard pour tous les types de connexion
     async redirect({ url, baseUrl }) {
-      console.log("🔄 Redirection:", { url, baseUrl })
+      console.log("🔄 Redirection demandée:", { url, baseUrl })
       
       // Si c'est une URL relative, l'ajouter au baseUrl
       if (url.startsWith("/")) {
-        return `${baseUrl}${url}`
+        const fullUrl = `${baseUrl}${url}`
+        console.log("🔄 URL relative détectée:", fullUrl)
+        
+        // Si on redirige vers le profil, rediriger vers le dashboard à la place
+        if (url === '/profile') {
+          console.log("🏠 Redirection /profile → /dashboard")
+          return `${baseUrl}/dashboard`
+        }
+        
+        return fullUrl
       }
       
       // Si c'est une URL du même domaine
       if (new URL(url).origin === baseUrl) {
+        const urlObj = new URL(url)
+        
+        // Si on redirige vers le profil, rediriger vers le dashboard à la place
+        if (urlObj.pathname === '/profile') {
+          console.log("🏠 Redirection URL complète /profile → /dashboard")
+          return `${baseUrl}/dashboard`
+        }
+        
         return url
       }
       
-      // Par défaut, rediriger vers le profil
-      return `${baseUrl}/profile`
+      // Par défaut, rediriger vers le dashboard au lieu du profil
+      console.log("🏠 Redirection par défaut vers /dashboard")
+      return `${baseUrl}/dashboard`
     }
   },
 
@@ -217,7 +217,7 @@ export const authOptions: NextAuthOptions = {
       console.log(`✅ Utilisateur connecté: ${user.email} via ${account?.provider}`)
     },
     async signOut({ session, token }) {
-      console.log(`👋 Utilisateur déconnecté: ${session?.user?.email}`)
+      console.log(`👋 Utilisateur déconnexé: ${session?.user?.email}`)
     },
   },
 

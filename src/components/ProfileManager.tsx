@@ -7,6 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { CldUploadWidget } from 'next-cloudinary';
 import { motion, AnimatePresence } from 'framer-motion';
 import { signOut, useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import { 
   UserIcon, 
   PhotoIcon, 
@@ -18,7 +19,8 @@ import {
   StarIcon,
   PlusIcon,
   CheckIcon,
-  ExclamationTriangleIcon
+  ExclamationTriangleIcon,
+  Squares2X2Icon
 } from '@heroicons/react/24/outline';
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
 import { z } from 'zod';
@@ -72,7 +74,7 @@ interface UserProfile {
   updatedAt: string;
 }
 
-type TabType = 'overview' | 'edit' | 'photos' | 'preferences' | 'settings';
+type TabType = 'dashboard' | 'overview' | 'edit' | 'photos' | 'preferences' | 'settings';
 
 // ===== COMPOSANT PRINCIPAL =====
 const ProfileManager: React.FC = () => {
@@ -90,6 +92,9 @@ const ProfileManager: React.FC = () => {
     uploadPreset: '',
     cloudName: ''
   });
+
+  // Router pour navigation
+  const router = useRouter();
 
   // 🔥 NOUVEAU: Récupérer la session NextAuth pour fallback
   const { data: session, status: sessionStatus } = useSession();
@@ -131,6 +136,7 @@ const ProfileManager: React.FC = () => {
   const interests = watchProfile('interests') || [];
 
   const tabs = [
+    { id: 'dashboard', label: 'Dashboard', icon: Squares2X2Icon },
     { id: 'overview', label: 'Aperçu', icon: EyeIcon },
     { id: 'edit', label: 'Modifier', icon: PencilIcon },
     { id: 'photos', label: 'Photos', icon: PhotoIcon },
@@ -143,6 +149,15 @@ const ProfileManager: React.FC = () => {
     checkCloudinaryConfig();
     loadProfile();
   }, []);
+
+  // Gérer le clic sur l'onglet Dashboard
+  const handleTabClick = (tabId: TabType) => {
+    if (tabId === 'dashboard') {
+      router.push('/dashboard');
+    } else {
+      setActiveTab(tabId);
+    }
+  };
 
   // Vérifier la configuration Cloudinary
   const checkCloudinaryConfig = () => {
@@ -559,7 +574,9 @@ const ProfileManager: React.FC = () => {
   };
 
   return (
-    <div className="max-w-6xl mx-auto p-6">
+
+    <div className="min-h-screen bg-gradient-to-br from-pink-50 via-rose-50 to-purple-50">
+    <div className="max-w-6xl mx-auto p-6 ">
       {/* Header avec navigation par onglets */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
@@ -598,17 +615,20 @@ const ProfileManager: React.FC = () => {
         <div className="flex overflow-x-auto">
           {tabs.map((tab) => {
             const Icon = tab.icon;
+            const isDashboard = tab.id === 'dashboard';
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as TabType)}
+                onClick={() => handleTabClick(tab.id as TabType)}
                 className={`flex items-center gap-2 px-6 py-4 whitespace-nowrap border-b-2 transition-colors ${
-                  activeTab === tab.id
+                  isDashboard
+                    ? 'border-pink-500 text-pink-600 bg-gradient-to-r from-pink-50 to-rose-50'
+                    : activeTab === tab.id
                     ? 'border-pink-500 text-pink-600 bg-pink-50'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
                 }`}
               >
-                <Icon className="w-5 h-5" />
+                <Icon className={`w-5 h-5 ${isDashboard ? 'text-pink-500' : ''}`} />
                 {tab.label}
                 {/* Indicateurs de changements non sauvegardés */}
                 {((tab.id === 'edit' && isDirtyProfile) || 
@@ -1394,6 +1414,7 @@ const ProfileManager: React.FC = () => {
           </motion.div>
         )}
       </AnimatePresence>
+    </div>
     </div>
   );
 };
