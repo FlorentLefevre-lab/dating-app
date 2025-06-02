@@ -24,3 +24,14 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Solution pour éviter le chevauchement navbar */
+body {
+  padding-bottom: 80px;
+  /* Espace pour la navbar fixe */
+}
+
+/* Optionnel : scroll smooth pour une meilleure UX */
+html {
+  scroll-behavior: smooth;
+}

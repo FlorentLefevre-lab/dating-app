@@ -57,19 +57,29 @@ model User {
   ethnicity            String?
   postcode             String?
   region               String?
+  
+  // ✅ Relations avec noms simples et lisibles
   accounts             Account[]
+  sessions             Session[]
+  photos               Photo[]
+  preferences          UserPreferences?
+  
+  // ✅ Relations de likes avec alias courts
   receivedLikes        Like[]           @relation("LikeReceiver")
   sentLikes            Like[]           @relation("LikeSender")
+  
+  // ✅ Relations de messages avec alias courts - CHAT UNIVERSEL
   receivedMessages     Message[]        @relation("MessageReceiver")
   sentMessages         Message[]        @relation("MessageSender")
-  photos               Photo[]
-  sessions             Session[]
-  preferences          UserPreferences?
+  
+  // ✅ Relations de dislikes avec alias courts
   receivedDislikes     Dislike[]        @relation("DislikeReceiver")
   sentDislikes         Dislike[]        @relation("DislikeSender")
+  
+  // ✅ Relations de vues de profil avec alias courts
   profileViewsReceived ProfileView[]    @relation("ProfileViewed")
   profileViewsGiven    ProfileView[]    @relation("ProfileViewer")
-  matches              Match[]          @relation("UserMatches")
+  
 }
 
 model Photo {
@@ -99,6 +109,7 @@ model Like {
   senderId   String
   receiverId String
   createdAt  DateTime @default(now())
+  
   receiver   User     @relation("LikeReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
   sender     User     @relation("LikeSender", fields: [senderId], references: [id], onDelete: Cascade)
 
@@ -110,6 +121,7 @@ model Dislike {
   senderId   String
   receiverId String
   createdAt  DateTime @default(now())
+  
   receiver   User     @relation("DislikeReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
   sender     User     @relation("DislikeSender", fields: [senderId], references: [id], onDelete: Cascade)
 
@@ -122,6 +134,7 @@ model ProfileView {
   viewerId String
   viewedId String
   viewedAt DateTime @default(now())
+  
   viewed   User     @relation("ProfileViewed", fields: [viewedId], references: [id], onDelete: Cascade)
   viewer   User     @relation("ProfileViewer", fields: [viewerId], references: [id], onDelete: Cascade)
 
@@ -129,22 +142,16 @@ model ProfileView {
   @@map("profile_views")
 }
 
-model Match {
-  id        String    @id @default(cuid())
-  createdAt DateTime  @default(now())
-  messages  Message[]
-  users     User[]    @relation("UserMatches")
-}
-
+// ✅ MODÈLE MESSAGE - CHAT UNIVERSEL SANS MATCH
 model Message {
   id         String    @id @default(cuid())
   content    String
   senderId   String
   receiverId String
-  matchId    String
   createdAt  DateTime  @default(now())
   readAt     DateTime?
-  match      Match     @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  
+  // ✅ Relations directes utilisateur à utilisateur - PAS DE MATCH
   receiver   User      @relation("MessageReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
   sender     User      @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
 }

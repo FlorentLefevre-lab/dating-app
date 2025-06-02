@@ -42,8 +42,18 @@ interface MatchesData {
 }
 
 const MatchCard: React.FC<{ match: Match; onClick: () => void }> = ({ match, onClick }) => {
-  const formatTime = (dateString: string) => {
+  // Vérification de sécurité
+  if (!match || !match.user) {
+    console.error('Match invalide:', match);
+    return null;
+  }
+
+  const formatTime = (dateString: string | null | undefined) => {
+    if (!dateString) return 'Date inconnue';
+    
     const date = new Date(dateString);
+    if (isNaN(date.getTime())) return 'Date invalide';
+    
     const now = new Date();
     const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
     
@@ -67,8 +77,12 @@ const MatchCard: React.FC<{ match: Match; onClick: () => void }> = ({ match, onC
             {match.user.photo ? (
               <img
                 src={match.user.photo}
-                alt={match.user.name}
+                alt={match.user.name || 'Photo de profil'}
                 className="w-full h-full object-cover"
+                onError={(e) => {
+                  console.error('Erreur chargement image:', match.user.photo);
+                  e.currentTarget.style.display = 'none';
+                }}
               />
             ) : (
               <UserIcon className="w-8 h-8 text-gray-400" />
@@ -94,7 +108,7 @@ const MatchCard: React.FC<{ match: Match; onClick: () => void }> = ({ match, onC
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between mb-1">
             <h3 className="font-semibold text-gray-900 truncate">
-              {match.user.name}
+              {match.user.name || 'Utilisateur inconnu'}
               {match.user.age && <span className="text-gray-500 font-normal">, {match.user.age}</span>}
             </h3>
             <span className="text-xs text-gray-500 flex-shrink-0">
@@ -140,7 +154,7 @@ const StatsCard: React.FC<{
           {icon}
         </div>
         <div>
-          <p className="text-2xl font-bold text-gray-900">{value}</p>
+          <p className="text-2xl font-bold text-gray-900">{value || 0}</p>
           <p className="text-sm text-gray-600">{title}</p>
         </div>
       </div>
@@ -155,21 +169,38 @@ export default function MatchesPage() {
 
   const loadMatches = async () => {
     try {
+      console.log('📡 Fetching matches...');
       setLoading(true);
       setError(null);
 
       const response = await fetch('/api/matches');
+      console.log('📡 Response status:', response.status);
       
       if (!response.ok) {
-        throw new Error('Erreur lors du chargement des matches');
+        throw new Error(`Erreur HTTP: ${response.status}`);
       }
 
       const data = await response.json();
-      console.log('📊 Données matches reçues:', data);
+      console.log('📊 Raw data structure:', {
+        hasMatches: !!data.matches,
+        matchesLength: data.matches?.length,
+        hasStats: !!data.stats,
+        sampleMatch: data.matches?.[0]
+      });
+
+      // Validation des données
+      if (!data.matches || !Array.isArray(data.matches)) {
+        throw new Error('Format de données invalide: matches manquant');
+      }
+
+      if (!data.stats) {
+        throw new Error('Format de données invalide: stats manquantes');
+      }
+      
       setMatchesData(data);
 
     } catch (err: any) {
-      console.error('❌ Erreur chargement matches:', err);
+      console.error('❌ Error details:', err);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -177,10 +208,16 @@ export default function MatchesPage() {
   };
 
   useEffect(() => {
+    console.log('🔄 MatchesPage: Component mounted');
     loadMatches();
   }, []);
 
   const handleMatchClick = (match: Match) => {
+    if (!match || !match.user) {
+      console.error('Match invalide lors du clic:', match);
+      return;
+    }
+    
     console.log('💬 Clic sur match:', match.user.name);
     // TODO: Naviguer vers la conversation
     // router.push(`/chat/${match.id}`);
@@ -216,7 +253,7 @@ export default function MatchesPage() {
     );
   }
 
-  if (!matchesData || matchesData.matches.length === 0) {
+  if (!matchesData || !matchesData.matches || matchesData.matches.length === 0) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-pink-50 to-purple-50">
         {/* Header */}
@@ -265,19 +302,19 @@ export default function MatchesPage() {
         <div className="grid grid-cols-3 gap-4 mb-6">
           <StatsCard
             title="Matches"
-            value={matchesData.stats.totalMatches}
+            value={matchesData.stats?.totalMatches || 0}
             icon={<HeartSolid className="w-5 h-5 text-white" />}
             color="bg-gradient-to-r from-pink-500 to-rose-500"
           />
           <StatsCard
             title="Nouveaux"
-            value={matchesData.stats.newMatches}
+            value={matchesData.stats?.newMatches || 0}
             icon={<SparklesIcon className="w-5 h-5 text-white" />}
             color="bg-gradient-to-r from-purple-500 to-indigo-500"
           />
           <StatsCard
             title="Conversations"
-            value={matchesData.stats.activeConversations}
+            value={matchesData.stats?.activeConversations || 0}
             icon={<ChatBubbleLeftIcon className="w-5 h-5 text-white" />}
             color="bg-gradient-to-r from-blue-500 to-cyan-500"
           />

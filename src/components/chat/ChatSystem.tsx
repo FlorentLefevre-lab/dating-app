@@ -1,575 +1,531 @@
-"use client";
+// src/components/chat/ChatSystem.tsx - Version pur universelle (sans match)
+'use client';
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Send, Phone, Video, MoreVertical, ArrowLeft, Image, Paperclip, Smile, Heart, Check, CheckCheck } from 'lucide-react';
-import { useAuth } from '@/hooks/useAuth';
-import { useMatches } from '@/hooks/useMatches';
-import io, { Socket } from 'socket.io-client';
+import { useChat } from '@/hooks/useChat';
 
-// Types adaptés à votre schéma Prisma existant
-interface Message {
+interface User {
   id: string;
-  content: string;
-  senderId: string;
-  receiverId: string;
-  matchId: string;
-  createdAt: string;
-  readAt?: string;
-  sender: {
-    id: string;
-    name: string;
-    image?: string;
-  };
-}
-
-interface MatchConversation {
-  id: string; // Match ID
-  users: Array<{
-    id: string;
-    name: string;
-    image?: string;
-    isOnline?: boolean;
-    lastSeen?: string;
-  }>;
-  lastMessage?: Message;
-  unreadCount: number;
-  createdAt: string;
-  messages?: Message[];
+  name?: string;
+  email?: string;
+  image?: string;
 }
 
 interface ChatSystemProps {
-  initialMatches?: MatchConversation[];
-  selectedMatchId?: string;
+  currentUser: User;
+  remoteUser: User;
+  onClose?: () => void;
 }
 
-const ChatSystem: React.FC<ChatSystemProps> = ({ 
-  initialMatches = [], 
-  selectedMatchId 
+interface DebugLog {
+  timestamp: Date;
+  type: 'sent' | 'received' | 'auth' | 'error' | 'system' | 'conversation';
+  message: string;
+  data?: any;
+}
+
+export const ChatSystem: React.FC<ChatSystemProps> = ({
+  currentUser,
+  remoteUser,
+  onClose
 }) => {
-  // État principal
-  const [matches, setMatches] = useState<MatchConversation[]>(initialMatches);
-  const [selectedMatch, setSelectedMatch] = useState<string | null>(selectedMatchId || null);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [newMessage, setNewMessage] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
-  const [typingUsers, setTypingUsers] = useState<string[]>([]);
-  const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
-  const [loading, setLoading] = useState(false);
+  const {
+    connected,
+    authenticated,
+    conversations,
+    activeConversation,
+    onlineUsers,
+    stats,
+    startConversation,
+    sendMessage,
+    openConversation,
+    closeConversation,
+    getActiveMessages,
+    isUserOnline,
+    error: chatError,
+    clearError
+  } = useChat();
   
+  // États du chat
+  const [newMessage, setNewMessage] = useState<string>('');
+  const [conversationStarted, setConversationStarted] = useState<boolean>(false);
+  
+  // Debug
+  const [debugLogs, setDebugLogs] = useState<DebugLog[]>([]);
+  const [showDebug, setShowDebug] = useState<boolean>(true);
+
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const socketRef = useRef<Socket | null>(null);
-  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  
-  // Hooks
-  const { user } = useAuth();
+  const conversationInitRef = useRef<boolean>(false);
 
-  // Configuration Socket.io
+  // Vérification des paramètres
+  const hasRequiredParams = Boolean(currentUser?.id && remoteUser?.id);
+
+  // Fonction de debug stable
+  const addDebugLog = useCallback((type: DebugLog['type'], message: string, data?: any) => {
+    const log: DebugLog = {
+      timestamp: new Date(),
+      type,
+      message,
+      data
+    };
+    
+    console.log(`🐛 [${type.toUpperCase()}] ${message}`, data || '');
+    
+    setDebugLogs(prev => [...prev.slice(-20), log]);
+  }, []);
+
+  // Debug initial
   useEffect(() => {
-    if (!user?.id) return;
+    addDebugLog('system', 'ChatSystem Pur Universel initialisé', {
+      connected,
+      authenticated,
+      currentUser: currentUser?.id,
+      remoteUser: remoteUser?.id,
+      conversationsCount: conversations.length,
+      onlineUsersCount: stats.onlineUsersCount,
+      chatType: 'Pure Universal (No Match System)'
+    });
+  }, [connected, authenticated, currentUser?.id, remoteUser?.id, conversations.length, stats.onlineUsersCount, addDebugLog]);
 
-    socketRef.current = io(process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3001', {
-      auth: {
-        userId: user.id,
-        token: user.token
-      }
+  // Fonction pour créer l'ID de conversation universel
+  const createConversationId = useCallback((userId1: string, userId2: string) => {
+    const sorted = [userId1, userId2].sort();
+    return `conv_${sorted[0].replace(/[@.]/g, '_')}_${sorted[1].replace(/[@.]/g, '_')}`;
+  }, []);
+
+  // Recherche et démarrage de conversation
+  useEffect(() => {
+    if (!connected || !authenticated || !hasRequiredParams || conversationInitRef.current) {
+      return;
+    }
+
+    addDebugLog('conversation', 'Recherche conversation pure existante', { 
+      targetUser: remoteUser.id,
+      targetName: remoteUser.name,
+      availableConversations: conversations.length,
+      chatType: 'Pure Universal'
+    });
+    
+    conversationInitRef.current = true;
+
+    // Créer l'ID de conversation universel
+    const expectedConvId = createConversationId(currentUser.id, remoteUser.id);
+    
+    addDebugLog('conversation', 'ID conversation pur calculé', { 
+      expectedConvId,
+      currentUserId: currentUser.id,
+      remoteUserId: remoteUser.id
     });
 
-    const socket = socketRef.current;
+    // Chercher une conversation existante avec cet utilisateur
+    const existingConv = conversations.find(conv => 
+      conv.with?.id === remoteUser.id || conv.id === expectedConvId
+    );
 
-    socket.on('connect', () => {
-      console.log('Connecté au serveur de chat');
-      socket.emit('user:online', user.id);
+    if (existingConv) {
+      addDebugLog('conversation', '✅ Conversation pure existante trouvée', { 
+        conversationId: existingConv.id,
+        withUser: existingConv.with?.name || existingConv.with?.id
+      });
+      openConversation(existingConv.id);
+      setConversationStarted(true);
+    } else {
+      addDebugLog('conversation', '🆕 Création nouvelle conversation pure');
+      startConversation(remoteUser.id);
+    }
+  }, [connected, authenticated, hasRequiredParams, remoteUser.id, remoteUser.name, conversations, startConversation, openConversation, currentUser.id, createConversationId, addDebugLog]);
+
+  // Reset si déconnexion
+  useEffect(() => {
+    if (!connected || !authenticated) {
+      conversationInitRef.current = false;
+      setConversationStarted(false);
+      addDebugLog('system', 'Reset état conversation (déconnexion)');
+    }
+  }, [connected, authenticated, addDebugLog]);
+
+  // Surveillance conversation active
+  useEffect(() => {
+    if (activeConversation && !conversationStarted) {
+      addDebugLog('conversation', '✅ Conversation pure activée', { 
+        conversationId: activeConversation 
+      });
+      setConversationStarted(true);
+      scrollToBottom();
+    }
+  }, [activeConversation, conversationStarted, addDebugLog]);
+
+  // Surveillance des messages
+  const messages = getActiveMessages();
+  useEffect(() => {
+    if (messages.length > 0 && conversationStarted) {
+      addDebugLog('received', `${messages.length} messages dans la conversation pure`);
+      scrollToBottom();
+    }
+  }, [messages.length, conversationStarted, addDebugLog]);
+
+  // Surveillance utilisateur en ligne
+  useEffect(() => {
+    const isRemoteOnline = isUserOnline(remoteUser.id);
+    addDebugLog('system', `Statut ${remoteUser.name || remoteUser.id}`, { 
+      online: isRemoteOnline,
+      totalOnline: stats.onlineUsersCount
     });
+  }, [remoteUser.id, remoteUser.name, isUserOnline, stats.onlineUsersCount, addDebugLog]);
 
-    socket.on('message:new', handleNewMessage);
-    socket.on('message:read', handleMessageRead);
-    socket.on('user:typing', handleUserTyping);
-    socket.on('user:stop-typing', handleUserStopTyping);
-    socket.on('user:online', handleUserOnline);
-    socket.on('user:offline', handleUserOffline);
-
-    return () => {
-      socket.emit('user:offline', user.id);
-      socket.disconnect();
-    };
-  }, [user?.id]);
-
-  // Charger les matches avec messages
-  useEffect(() => {
-    if (user?.id) {
-      loadMatches();
-    }
-  }, [user?.id]);
-
-  // Handlers Socket.io
-  const handleNewMessage = useCallback((message: Message) => {
-    setMessages(prev => [...prev, message]);
-    
-    // Mettre à jour le match
-    setMatches(prev => prev.map(match => {
-      if (match.id === message.matchId) {
-        return {
-          ...match,
-          lastMessage: message,
-          unreadCount: message.senderId !== user?.id ? match.unreadCount + 1 : match.unreadCount
-        };
-      }
-      return match;
-    }));
-
-    // Marquer comme lu si c'est notre conversation active
-    if (selectedMatch === message.matchId && message.senderId !== user?.id) {
-      markMessageAsRead(message.id);
-    }
-  }, [selectedMatch, user?.id]);
-
-  const handleMessageRead = useCallback((messageId: string) => {
-    setMessages(prev => prev.map(msg => 
-      msg.id === messageId ? { ...msg, readAt: new Date().toISOString() } : msg
-    ));
-  }, []);
-
-  const handleUserTyping = useCallback((userId: string) => {
-    setTypingUsers(prev => [...prev.filter(id => id !== userId), userId]);
-  }, []);
-
-  const handleUserStopTyping = useCallback((userId: string) => {
-    setTypingUsers(prev => prev.filter(id => id !== userId));
-  }, []);
-
-  const handleUserOnline = useCallback((userId: string) => {
-    setOnlineUsers(prev => [...prev.filter(id => id !== userId), userId]);
-  }, []);
-
-  const handleUserOffline = useCallback((userId: string) => {
-    setOnlineUsers(prev => prev.filter(id => id !== userId));
-  }, []);
-
-  // Charger les matches de l'utilisateur
-  const loadMatches = useCallback(async () => {
-    try {
-      setLoading(true);
-      const response = await fetch('/api/matches', {
-        headers: {
-          'Authorization': `Bearer ${user?.token}`
-        }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setMatches(data.matches || []);
-      }
-    } catch (error) {
-      console.error('Erreur lors du chargement des matches:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [user?.token]);
-
-  // Chargement des messages d'un match
-  const loadMatchMessages = useCallback(async (matchId: string) => {
-    try {
-      setLoading(true);
-      const response = await fetch(`/api/messages?matchId=${matchId}`, {
-        headers: {
-          'Authorization': `Bearer ${user?.token}`
-        }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setMessages(data.messages || []);
-        
-        // Marquer tous les messages non lus comme lus
-        const unreadMessages = data.messages.filter((msg: Message) => 
-          !msg.readAt && msg.senderId !== user?.id
-        );
-        
-        unreadMessages.forEach((msg: Message) => {
-          markMessageAsRead(msg.id);
-        });
-        
-        // Rejoindre la room du match
-        socketRef.current?.emit('match:join', matchId);
-      }
-    } catch (error) {
-      console.error('Erreur lors du chargement des messages:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [user?.token, user?.id]);
-
-  // Sélection d'un match
-  const selectMatch = useCallback((matchId: string) => {
-    if (selectedMatch) {
-      socketRef.current?.emit('match:leave', selectedMatch);
-    }
-    
-    setSelectedMatch(matchId);
-    loadMatchMessages(matchId);
-    
-    // Réinitialiser le compteur de messages non lus
-    setMatches(prev => prev.map(match => 
-      match.id === matchId ? { ...match, unreadCount: 0 } : match
-    ));
-  }, [selectedMatch, loadMatchMessages]);
-
-  // Envoi d'un message
-  const sendMessage = useCallback(async () => {
-    if (!newMessage.trim() || !selectedMatch || !user?.id) return;
-
-    const currentMatch = matches.find(m => m.id === selectedMatch);
-    if (!currentMatch) return;
-
-    const receiverId = currentMatch.users.find(u => u.id !== user.id)?.id;
-    if (!receiverId) return;
-
-    const messageData = {
-      content: newMessage.trim(),
-      matchId: selectedMatch,
-      senderId: user.id,
-      receiverId
-    };
-
-    try {
-      // Envoyer via Socket.io pour la rapidité
-      socketRef.current?.emit('message:send', messageData);
-      
-      // Aussi envoyer via API pour la persistance
-      const response = await fetch('/api/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${user.token}`
-        },
-        body: JSON.stringify(messageData)
-      });
-
-      if (response.ok) {
-        setNewMessage('');
-      }
-    } catch (error) {
-      console.error('Erreur lors de l\'envoi du message:', error);
-    }
-  }, [newMessage, selectedMatch, user, matches]);
-
-  // Marquer un message comme lu
-  const markMessageAsRead = useCallback(async (messageId: string) => {
-    try {
-      await fetch(`/api/messages/${messageId}/read`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${user?.token}`
-        }
-      });
-      
-      socketRef.current?.emit('message:read', messageId);
-    } catch (error) {
-      console.error('Erreur lors du marquage comme lu:', error);
-    }
-  }, [user?.token]);
-
-  // Gestion de la frappe
-  const handleTyping = useCallback(() => {
-    if (!selectedMatch || !user?.id) return;
-
-    if (!isTyping) {
-      setIsTyping(true);
-      socketRef.current?.emit('typing:start', { matchId: selectedMatch, userId: user.id });
-    }
-
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-    }
-
-    typingTimeoutRef.current = setTimeout(() => {
-      setIsTyping(false);
-      socketRef.current?.emit('typing:stop', { matchId: selectedMatch, userId: user.id });
-    }, 1000);
-  }, [selectedMatch, user?.id, isTyping]);
-
-  // Auto-scroll vers le bas
-  useEffect(() => {
+  // Scroll automatique
+  const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, []);
 
-  // Composant de liste des matches
-  const MatchesList = () => (
-    <div className="w-full lg:w-1/3 bg-white border-r border-gray-200">
-      {/* Header */}
-      <div className="p-4 border-b border-gray-200">
-        <h2 className="text-xl font-bold text-gray-800">Matches</h2>
-        <p className="text-sm text-gray-500">{matches.length} conversation{matches.length > 1 ? 's' : ''}</p>
-      </div>
-
-      {/* Liste des matches */}
-      <div className="overflow-y-auto h-full">
-        {loading && matches.length === 0 ? (
-          <div className="p-4 text-center">
-            <div className="animate-spin w-6 h-6 border-2 border-pink-500 border-t-transparent rounded-full mx-auto mb-2" />
-            <p className="text-gray-500">Chargement...</p>
-          </div>
-        ) : matches.length === 0 ? (
-          <div className="p-8 text-center">
-            <Heart className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500 font-medium">Aucun match pour le moment</p>
-            <p className="text-gray-400 text-sm">Continuez à swiper pour trouver des matchs !</p>
-          </div>
-        ) : (
-          matches.map(match => {
-            const otherUser = match.users.find(u => u.id !== user?.id);
-            const isOnline = onlineUsers.includes(otherUser?.id || '');
-            
-            return (
-              <div
-                key={match.id}
-                onClick={() => selectMatch(match.id)}
-                className={`p-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors ${
-                  selectedMatch === match.id ? 'bg-blue-50 border-blue-200' : ''
-                }`}
-              >
-                <div className="flex items-center space-x-3">
-                  {/* Avatar avec indicateur en ligne */}
-                  <div className="relative">
-                    <img
-                      src={otherUser?.image || '/placeholder-avatar.jpg'}
-                      alt={otherUser?.name}
-                      className="w-12 h-12 rounded-full object-cover"
-                    />
-                    {isOnline && (
-                      <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 border-2 border-white rounded-full" />
-                    )}
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-semibold text-gray-900 truncate">
-                        {otherUser?.name || 'Utilisateur'}
-                      </h3>
-                      <span className="text-xs text-gray-500">
-                        {match.lastMessage && formatTime(match.lastMessage.createdAt)}
-                      </span>
-                    </div>
-                    
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm text-gray-600 truncate">
-                        {match.lastMessage?.content || 'Commencez la conversation...'}
-                      </p>
-                      {match.unreadCount > 0 && (
-                        <span className="ml-2 bg-red-500 text-white text-xs rounded-full px-2 py-1 min-w-[20px] text-center">
-                          {match.unreadCount > 99 ? '99+' : match.unreadCount}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
-    </div>
-  );
-
-  // Composant de chat
-  const ChatWindow = () => {
-    if (!selectedMatch) {
-      return (
-        <div className="flex-1 flex items-center justify-center bg-gray-50">
-          <div className="text-center">
-            <div className="text-6xl mb-4">💬</div>
-            <h3 className="text-xl font-semibold text-gray-700 mb-2">Sélectionnez un match</h3>
-            <p className="text-gray-500">Choisissez un match pour commencer à chatter</p>
-          </div>
-        </div>
-      );
+  // Envoi de message
+  const handleSendMessage = useCallback(() => {
+    if (!newMessage.trim() || !connected || !authenticated || !activeConversation) {
+      addDebugLog('error', 'Envoi bloqué', { 
+        message: !!newMessage.trim(), 
+        connected,
+        authenticated,
+        activeConversation: !!activeConversation
+      });
+      return;
     }
 
-    const currentMatch = matches.find(m => m.id === selectedMatch);
-    const otherUser = currentMatch?.users.find(u => u.id !== user?.id);
-    const isOnline = onlineUsers.includes(otherUser?.id || '');
+    addDebugLog('sent', `Envoi: "${newMessage.trim()}"`, {
+      conversationId: activeConversation,
+      to: remoteUser.id,
+      chatType: 'Pure Universal'
+    });
 
+    sendMessage(activeConversation, newMessage.trim());
+    setNewMessage('');
+    scrollToBottom();
+  }, [newMessage, connected, authenticated, activeConversation, sendMessage, remoteUser.id, scrollToBottom, addDebugLog]);
+
+  // Gestion clavier
+  const handleKeyPress = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  }, [handleSendMessage]);
+
+  // Test de connectivité
+  const testConnection = useCallback(() => {
+    addDebugLog('system', 'Test de connectivité pure', {
+      connected,
+      authenticated,
+      activeConversation,
+      messagesCount: messages.length,
+      conversationsCount: conversations.length,
+      onlineUsersCount: stats.onlineUsersCount,
+      expectedConvId: createConversationId(currentUser.id, remoteUser.id),
+      chatType: 'Pure Universal'
+    });
+
+    if (connected && authenticated && !activeConversation) {
+      addDebugLog('system', 'Redémarrage conversation pure');
+      conversationInitRef.current = false;
+      startConversation(remoteUser.id);
+    }
+  }, [connected, authenticated, activeConversation, messages.length, conversations.length, stats.onlineUsersCount, startConversation, remoteUser.id, currentUser.id, createConversationId, addDebugLog]);
+
+  // Fermeture du chat
+  const handleClose = useCallback(() => {
+    addDebugLog('system', 'Fermeture du chat pur');
+    if (activeConversation) {
+      closeConversation();
+    }
+    onClose?.();
+  }, [activeConversation, closeConversation, onClose, addDebugLog]);
+
+  // Gestion des erreurs
+  useEffect(() => {
+    if (chatError) {
+      addDebugLog('error', `Erreur chat: ${chatError}`);
+    }
+  }, [chatError, addDebugLog]);
+
+  // Interface d'erreur
+  if (chatError) {
     return (
-      <div className="flex-1 flex flex-col bg-white">
-        {/* Header du chat */}
-        <div className="p-4 border-b border-gray-200 bg-white">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <button 
-                onClick={() => setSelectedMatch(null)}
-                className="lg:hidden p-2 hover:bg-gray-100 rounded-full"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-              
-              <div className="relative">
-                <img
-                  src={otherUser?.image || '/placeholder-avatar.jpg'}
-                  alt={otherUser?.name}
-                  className="w-10 h-10 rounded-full object-cover"
-                />
-                {isOnline && (
-                  <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 border border-white rounded-full" />
-                )}
-              </div>
-              
-              <div>
-                <h3 className="font-semibold text-gray-900">{otherUser?.name}</h3>
-                <p className="text-sm text-gray-500">
-                  {isOnline ? 'En ligne' : 'Hors ligne'}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center space-x-2">
-              <button className="p-2 hover:bg-gray-100 rounded-full">
-                <Phone className="w-5 h-5 text-gray-600" />
-              </button>
-              <button className="p-2 hover:bg-gray-100 rounded-full">
-                <Video className="w-5 h-5 text-gray-600" />
-              </button>
-              <button className="p-2 hover:bg-gray-100 rounded-full">
-                <MoreVertical className="w-5 h-5 text-gray-600" />
-              </button>
-            </div>
+      <div className="flex items-center justify-center h-96 bg-red-50 rounded-lg">
+        <div className="text-center">
+          <div className="text-red-600 text-lg font-semibold mb-2">Erreur de Chat Pur</div>
+          <div className="text-red-500 text-sm mb-4">{chatError}</div>
+          <div className="text-xs text-gray-600 mb-4">
+            <div>Socket URL: {process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3001'}</div>
+            <div>Current User: {currentUser.id}</div>
+            <div>Remote User: {remoteUser.id}</div>
+            <div>Chat Type: Pure Universal (No Match)</div>
           </div>
+          <button
+            onClick={clearError}
+            className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+          >
+            Réessayer
+          </button>
         </div>
+      </div>
+    );
+  }
 
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {loading && messages.length === 0 ? (
-            <div className="flex justify-center">
-              <div className="animate-spin w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full" />
-            </div>
-          ) : messages.length === 0 ? (
-            <div className="text-center py-8">
-              <Heart className="w-12 h-12 text-pink-300 mx-auto mb-4" />
-              <p className="text-gray-500">C'est un nouveau match !</p>
-              <p className="text-gray-400 text-sm">Envoyez le premier message pour briser la glace</p>
-            </div>
-          ) : (
-            messages.map(message => (
-              <MessageBubble 
-                key={message.id} 
-                message={message} 
-                isOwn={message.senderId === user?.id}
-              />
-            ))
-          )}
-          
-          {/* Indicateur de frappe */}
-          {typingUsers.length > 0 && (
-            <div className="flex items-center space-x-2">
-              <div className="bg-gray-200 rounded-lg px-3 py-2">
-                <div className="flex space-x-1">
-                  <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" />
-                  <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
-                  <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
-                </div>
-              </div>
-            </div>
-          )}
-          
-          <div ref={messagesEndRef} />
-        </div>
-
-        {/* Zone de saisie */}
-        <div className="p-4 border-t border-gray-200 bg-white">
-          <div className="flex items-center space-x-2">
-            <button className="p-2 hover:bg-gray-100 rounded-full">
-              <Paperclip className="w-5 h-5 text-gray-600" />
-            </button>
-            <button className="p-2 hover:bg-gray-100 rounded-full">
-              <Image className="w-5 h-5 text-gray-600" />
-            </button>
-            
-            <div className="flex-1 relative">
-              <input
-                type="text"
-                value={newMessage}
-                onChange={(e) => {
-                  setNewMessage(e.target.value);
-                  handleTyping();
-                }}
-                onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
-                placeholder="Tapez votre message..."
-                className="w-full px-4 py-2 border border-gray-300 rounded-full focus:outline-none focus:border-blue-500"
-                maxLength={1000}
-              />
-            </div>
-            
-            <button className="p-2 hover:bg-gray-100 rounded-full">
-              <Smile className="w-5 h-5 text-gray-600" />
-            </button>
-            
-            <button
-              onClick={sendMessage}
-              disabled={!newMessage.trim()}
-              className="p-2 bg-blue-500 text-white rounded-full hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              <Send className="w-5 h-5" />
-            </button>
+  // Interface de paramètres manquants
+  if (!hasRequiredParams) {
+    return (
+      <div className="flex items-center justify-center h-96 bg-yellow-50 rounded-lg">
+        <div className="text-center">
+          <div className="text-yellow-600 text-lg font-semibold mb-2">Configuration incomplète</div>
+          <div className="text-yellow-500 text-sm mb-4">Paramètres utilisateur manquants</div>
+          <div className="text-xs text-gray-600 space-y-1">
+            <div>Current User: {currentUser?.id || '❌ Manquant'}</div>
+            <div>Remote User: {remoteUser?.id || '❌ Manquant'}</div>
+            <div>Chat Type: Pure Universal (No Match Required)</div>
           </div>
         </div>
       </div>
     );
-  };
-
-  // Composant de bulle de message
-  const MessageBubble: React.FC<{ message: Message; isOwn: boolean }> = ({ message, isOwn }) => (
-    <div className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
-      <div className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-        isOwn 
-          ? 'bg-blue-500 text-white' 
-          : 'bg-gray-200 text-gray-900'
-      }`}>
-        <p className="text-sm">{message.content}</p>
-        <div className={`flex items-center justify-end mt-1 space-x-1 ${
-          isOwn ? 'text-blue-100' : 'text-gray-500'
-        }`}>
-          <span className="text-xs">{formatTime(message.createdAt)}</span>
-          {isOwn && (
-            <div className="flex">
-              {message.readAt ? (
-                <CheckCheck className="w-3 h-3 text-blue-300" />
-              ) : (
-                <Check className="w-3 h-3" />
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-
-  // Fonction utilitaire pour formater l'heure
-  const formatTime = (timestamp: string) => {
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diff = now.getTime() - date.getTime();
-    
-    if (diff < 60000) return 'À l\'instant';
-    if (diff < 3600000) return `${Math.floor(diff / 60000)}m`;
-    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h`;
-    
-    return date.toLocaleDateString('fr-FR', { 
-      day: 'numeric', 
-      month: 'short' 
-    });
-  };
+  }
 
   return (
-    <div className="h-screen flex bg-gray-100">
-      {/* Vue mobile : matches OU chat */}
-      <div className="lg:hidden w-full">
-        {selectedMatch ? <ChatWindow /> : <MatchesList />}
+    <div className="flex h-screen bg-white">
+      {/* Zone de chat principale */}
+      <div className="flex-1 flex flex-col">
+        {/* En-tête */}
+        <div className="bg-gradient-to-r from-green-500 to-blue-500 text-white px-4 py-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center text-white font-semibold">
+                {remoteUser?.image ? (
+                  <img src={remoteUser.image} alt={remoteUser.name} className="w-full h-full rounded-full object-cover" />
+                ) : (
+                  (remoteUser?.name || remoteUser?.email || 'U').charAt(0).toUpperCase()
+                )}
+              </div>
+              <div>
+                <h3 className="font-semibold">
+                  {remoteUser?.name || remoteUser?.email?.split('@')[0] || 'Utilisateur'}
+                </h3>
+                <div className="flex items-center space-x-2 text-sm opacity-90">
+                  <div className={`w-2 h-2 rounded-full ${
+                    connected && authenticated ? 'bg-green-400' : 'bg-red-400'
+                  }`}></div>
+                  <span>
+                    {connected && authenticated ? (
+                      isUserOnline(remoteUser.id) ? 'En ligne' : 'Hors ligne'
+                    ) : 'Connexion...'}
+                  </span>
+                  <span className="text-xs bg-white/20 px-2 py-1 rounded">
+                    Chat Universel
+                  </span>
+                </div>
+              </div>
+            </div>
+            
+            {/* Controls */}
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setShowDebug(!showDebug)}
+                className="px-3 py-1 text-xs bg-white/20 rounded hover:bg-white/30 transition-colors"
+              >
+                {showDebug ? 'Masquer Debug' : 'Debug'}
+              </button>
+              <button
+                onClick={testConnection}
+                className="px-3 py-1 text-xs bg-white/20 rounded hover:bg-white/30 transition-colors"
+              >
+                Test
+              </button>
+              {onClose && (
+                <button
+                  onClick={handleClose}
+                  className="px-3 py-1 text-xs bg-white/20 rounded hover:bg-white/30 transition-colors"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Zone des messages */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
+          {!connected ? (
+            <div className="text-center text-gray-500 py-8">
+              <div className="text-lg mb-2">🔄</div>
+              <div>Connexion au chat universel...</div>
+              <div className="text-xs mt-2 text-gray-400">
+                URL: {process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3001'}
+              </div>
+            </div>
+          ) : !authenticated ? (
+            <div className="text-center text-gray-500 py-8">
+              <div className="text-lg mb-2">🔐</div>
+              <div>Authentification en cours...</div>
+              <div className="text-xs mt-2 text-gray-400">
+                User: {currentUser.email}
+              </div>
+            </div>
+          ) : !conversationStarted ? (
+            <div className="text-center text-gray-500 py-8">
+              <div className="text-lg mb-2">💬</div>
+              <div>Préparation de la conversation universelle...</div>
+              <div className="text-sm mt-2 space-y-1 text-gray-400">
+                <div>Avec: {remoteUser.name || remoteUser.id}</div>
+                <div>Conversations: {conversations.length}</div>
+                <div>En ligne: {stats.onlineUsersCount}</div>
+                <div>Expected ID: {createConversationId(currentUser.id, remoteUser.id)}</div>
+                <div className="text-green-600 font-medium">🌟 Chat 100% Libre</div>
+              </div>
+            </div>
+          ) : messages.length === 0 ? (
+            <div className="text-center text-gray-500 py-8">
+              <div className="text-lg mb-2">💭</div>
+              <div className="font-medium">Conversation universelle prête !</div>
+              <div className="text-sm mt-2">
+                Commencez à discuter avec {remoteUser.name || remoteUser.email} !
+              </div>
+              <div className="text-xs mt-4 space-y-1 text-gray-400">
+                <div>Conversation: {activeConversation}</div>
+                <div>En ligne: {isUserOnline(remoteUser.id) ? '🟢' : '🔴'}</div>
+                <div className="text-green-600 font-medium">🚀 Aucun match requis !</div>
+              </div>
+            </div>
+          ) : (
+            messages.map((message, index) => {
+              const isOwn = message.senderId === currentUser?.id;
+              return (
+                <div
+                  key={message.id || index}
+                  className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div
+                    className={`max-w-xs lg:max-w-md px-4 py-2 rounded-2xl ${
+                      isOwn
+                        ? 'bg-gradient-to-r from-green-500 to-blue-500 text-white'
+                        : 'bg-white text-gray-900 shadow-sm border'
+                    }`}
+                  >
+                    <div className="break-words">{message.content}</div>
+                    <div className={`text-xs mt-1 ${
+                      isOwn ? 'text-white/70' : 'text-gray-500'
+                    }`}>
+                      {new Date(message.timestamp).toLocaleTimeString('fr-FR', { 
+                        hour: '2-digit', 
+                        minute: '2-digit' 
+                      })}
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Zone de saisie */}
+        <div className="bg-white border-t p-4">
+          <div className="flex items-center space-x-2">
+            <input
+              type="text"
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              onKeyPress={handleKeyPress}
+              placeholder={
+                connected && authenticated && conversationStarted 
+                  ? `Écrivez à ${remoteUser.name || remoteUser.email}...`
+                  : "Connexion en cours..."
+              }
+              className="flex-1 border border-gray-300 rounded-full px-4 py-2 focus:outline-none focus:border-green-500 disabled:bg-gray-100"
+              disabled={!connected || !authenticated || !conversationStarted}
+            />
+            <button
+              onClick={handleSendMessage}
+              disabled={!newMessage.trim() || !connected || !authenticated || !conversationStarted}
+              className="px-6 py-2 bg-gradient-to-r from-green-500 to-blue-500 text-white rounded-full hover:from-green-600 hover:to-blue-600 disabled:from-gray-400 disabled:to-gray-400 disabled:cursor-not-allowed transition-all"
+            >
+              ✈️
+            </button>
+          </div>
+          
+          <div className="text-xs text-gray-400 mt-2 flex justify-between">
+            <span>
+              Socket: {connected ? '🟢' : '🔴'} | 
+              Auth: {authenticated ? '🟢' : '🔴'} | 
+              Conv: {conversationStarted ? '🟢' : '🔴'} | 
+              Messages: {messages.length} |
+              En ligne: {stats.onlineUsersCount} |
+              <span className="text-green-600 font-medium">Chat Libre</span>
+            </span>
+            <span>Debug: {debugLogs.length}</span>
+          </div>
+        </div>
       </div>
-      
-      {/* Vue desktop : matches ET chat */}
-      <div className="hidden lg:flex w-full">
-        <MatchesList />
-        <ChatWindow />
-      </div>
+
+      {/* Panneau de debug */}
+      {showDebug && (
+        <div className="w-80 bg-gray-50 border-l flex flex-col">
+          <div className="bg-gray-200 px-3 py-2 border-b flex justify-between items-center">
+            <h3 className="font-semibold text-sm">Debug Chat Pur</h3>
+            <button
+              onClick={() => setDebugLogs([])}
+              className="text-xs text-red-600 hover:text-red-800"
+            >
+              Vider
+            </button>
+          </div>
+          
+          {/* Stats en temps réel */}
+          <div className="bg-green-50 p-2 border-b text-xs space-y-1">
+            <div><strong>Socket:</strong> {connected ? '✅' : '❌'}</div>
+            <div><strong>Auth:</strong> {authenticated ? '✅' : '❌'}</div>
+            <div><strong>Conversation:</strong> {activeConversation || '❌'}</div>
+            <div><strong>Messages:</strong> {messages.length}</div>
+            <div><strong>Conversations:</strong> {conversations.length}</div>
+            <div><strong>En ligne:</strong> {stats.onlineUsersCount}</div>
+            <div><strong>Target Online:</strong> {isUserOnline(remoteUser.id) ? '🟢' : '🔴'}</div>
+            <div><strong>Expected ID:</strong> {createConversationId(currentUser.id, remoteUser.id)}</div>
+            <div className="text-green-600 font-bold">🌟 CHAT PUR UNIVERSEL</div>
+            <div className="text-xs text-green-600">Aucun système de match</div>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto p-2 space-y-1">
+            {debugLogs.map((log, index) => (
+              <div
+                key={`${log.timestamp.getTime()}-${index}`}
+                className={`text-xs p-2 rounded border-l-2 ${
+                  log.type === 'error' ? 'bg-red-50 text-red-800 border-red-500' :
+                  log.type === 'sent' ? 'bg-blue-50 text-blue-800 border-blue-500' :
+                  log.type === 'received' ? 'bg-green-50 text-green-800 border-green-500' :
+                  log.type === 'conversation' ? 'bg-purple-50 text-purple-800 border-purple-500' :
+                  log.type === 'auth' ? 'bg-yellow-50 text-yellow-800 border-yellow-500' :
+                  'bg-gray-50 text-gray-700 border-gray-300'
+                }`}
+              >
+                <div className="font-semibold flex justify-between">
+                  <span>[{log.type.toUpperCase()}]</span>
+                  <span>
+                    {log.timestamp.toLocaleTimeString('fr-FR', { 
+                      hour: '2-digit', 
+                      minute: '2-digit', 
+                      second: '2-digit' 
+                    })}
+                  </span>
+                </div>
+                <div className="mt-1">{log.message}</div>
+                {log.data && (
+                  <details className="mt-1">
+                    <summary className="cursor-pointer text-xs opacity-70">Détails</summary>
+                    <pre className="mt-1 bg-white bg-opacity-50 p-1 rounded text-xs overflow-x-auto">
+                      {JSON.stringify(log.data, null, 2)}
+                    </pre>
+                  </details>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

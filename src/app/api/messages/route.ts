@@ -1,128 +1,206 @@
-// ===========================================
-// ÉTAPE 5: API Routes Messages
-// FICHIER: src/app/api/messages/route.ts
-// ===========================================
-
-import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+// src/app/api/messages/route.ts - STRUCTURE CORRIGÉE POUR TA DB
+import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
-import { z } from 'zod';
+import { NextRequest, NextResponse } from 'next/server';
 
-const MessageSchema = z.object({
-  content: z.string().min(1).max(1000),
-  matchId: z.string(),
-  receiverId: z.string(),
-});
-
-// GET - Récupérer les messages d'un match
 export async function GET(request: NextRequest) {
+  console.log('🔍 API Messages GET appelée');
+  
   try {
+    // 1. Authentification
     const session = await getServerSession(authOptions);
+    
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
+      console.log('❌ Utilisateur non authentifié');
+      return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });
     }
 
+    console.log('✅ Utilisateur authentifié:', session.user.id);
+
+    // 2. Récupération du matchId
     const { searchParams } = new URL(request.url);
     const matchId = searchParams.get('matchId');
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '50');
-
+    
     if (!matchId) {
-      return NextResponse.json({ error: 'ID de match requis' }, { status: 400 });
+      console.log('❌ Match ID manquant');
+      return NextResponse.json({ error: 'Match ID requis' }, { status: 400 });
     }
 
-    // Vérifier que l'utilisateur fait partie du match
+    console.log('🔍 Récupération messages pour match:', matchId);
+
+    // 3. Import Prisma
+    const { prisma } = await import('@/lib/db');
+
+    // 4. Vérifier que l'utilisateur fait partie de ce match (structure many-to-many)
     const match = await prisma.match.findFirst({
       where: {
         id: matchId,
         users: {
-          some: { id: session.user.id }
+          some: {
+            id: session.user.id  // L'utilisateur doit être dans les users du match
+          }
+        }
+      },
+      include: {
+        users: {
+          select: {
+            id: true,
+            name: true,
+            image: true
+          }
         }
       }
     });
 
     if (!match) {
-      return NextResponse.json({ error: 'Match non trouvé' }, { status: 404 });
+      console.log('❌ Match non trouvé ou accès refusé');
+      return NextResponse.json({ error: 'Match introuvable' }, { status: 404 });
     }
 
-    // Récupérer les messages avec pagination
+    console.log('✅ Match validé, utilisateurs:', match.users.map(u => u.name));
+
+    // 5. Récupérer les messages du match
     const messages = await prisma.message.findMany({
       where: { matchId },
       include: {
         sender: {
-          select: { id: true, name: true, image: true }
+          select: {
+            id: true,
+            name: true,
+            image: true
+          }
         }
       },
-      orderBy: { createdAt: 'desc' },
-      take: limit,
-      skip: (page - 1) * limit
+      orderBy: { createdAt: 'asc' },
+      take: 100
     });
 
-    return NextResponse.json({
-      messages: messages.reverse(),
-      hasMore: messages.length === limit
+    console.log(`✅ ${messages.length} messages récupérés`);
+
+    // 6. Marquer les messages comme lus (en arrière-plan)
+    try {
+      const updateResult = await prisma.message.updateMany({
+        where: {
+          matchId,
+          senderId: { not: session.user.id }, // Messages reçus
+          readAt: null // Non encore lus
+        },
+        data: { readAt: new Date() }
+      });
+      console.log(`✅ ${updateResult.count} messages marqués comme lus`);
+    } catch (readError) {
+      console.warn('⚠️ Erreur marquage comme lu:', readError);
+    }
+
+    // 7. Formatage des messages
+    const formattedMessages = messages.map(msg => ({
+      id: msg.id,
+      content: msg.content,
+      senderId: msg.senderId,
+      receiverId: msg.receiverId,
+      matchId: msg.matchId,
+      createdAt: msg.createdAt.toISOString(),
+      readAt: msg.readAt?.toISOString() || null,
+      type: 'text', // Ajouter un champ type si nécessaire
+      attachments: [], // Ajouter des attachments si nécessaire
+      sender: msg.sender
+    }));
+
+    return NextResponse.json({ 
+      messages: formattedMessages,
+      debug: {
+        matchId,
+        messageCount: messages.length,
+        userId: session.user.id,
+        matchUsers: match.users.map(u => ({ id: u.id, name: u.name }))
+      }
     });
 
-  } catch (error) {
-    console.error('Erreur lors de la récupération des messages:', error);
-    return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 });
+  } catch (error: any) {
+    console.error('❌ Erreur API messages:', error);
+    return NextResponse.json({ 
+      error: 'Erreur serveur',
+      message: error.message
+    }, { status: 500 });
   }
 }
 
-// POST - Envoyer un nouveau message
 export async function POST(request: NextRequest) {
+  console.log('🔍 API Messages POST appelée');
+  
   try {
     const session = await getServerSession(authOptions);
+    
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
+      return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });
     }
 
     const body = await request.json();
-    const validatedData = MessageSchema.parse(body);
+    const { content, matchId, receiverId, type = 'text', attachments = [] } = body;
 
-    // Vérifier que l'utilisateur fait partie du match
+    if (!content || !matchId || !receiverId) {
+      return NextResponse.json({ error: 'Données manquantes' }, { status: 400 });
+    }
+
+    const { prisma } = await import('@/lib/db');
+
+    // Vérifier le match avec la structure many-to-many
     const match = await prisma.match.findFirst({
       where: {
-        id: validatedData.matchId,
+        id: matchId,
         users: {
-          some: { id: session.user.id }
+          some: {
+            id: session.user.id
+          }
         }
-      },
-      include: {
-        users: true
       }
     });
 
     if (!match) {
-      return NextResponse.json({ error: 'Match non trouvé' }, { status: 404 });
-    }
-
-    // Vérifier que le receiverId fait partie du match
-    const isValidReceiver = match.users.some(user => user.id === validatedData.receiverId);
-    if (!isValidReceiver) {
-      return NextResponse.json({ error: 'Destinataire invalide' }, { status: 400 });
+      return NextResponse.json({ error: 'Match introuvable' }, { status: 404 });
     }
 
     // Créer le message
     const message = await prisma.message.create({
       data: {
-        content: validatedData.content,
+        content,
         senderId: session.user.id,
-        receiverId: validatedData.receiverId,
-        matchId: validatedData.matchId
+        receiverId,
+        matchId
+        // Note: type et attachments peuvent être ajoutés au schéma si nécessaire
       },
       include: {
         sender: {
-          select: { id: true, name: true, image: true }
+          select: {
+            id: true,
+            name: true,
+            image: true
+          }
         }
       }
     });
 
-    return NextResponse.json({ message }, { status: 201 });
+    console.log('✅ Message créé:', message.id);
 
-  } catch (error) {
-    console.error('Erreur lors de l\'envoi du message:', error);
+    const formattedMessage = {
+      id: message.id,
+      content: message.content,
+      senderId: message.senderId,
+      receiverId: message.receiverId,
+      matchId: message.matchId,
+      createdAt: message.createdAt.toISOString(),
+      readAt: message.readAt?.toISOString() || null,
+      type: type,
+      attachments: attachments,
+      sender: message.sender
+    };
+
+    return NextResponse.json({ 
+      message: formattedMessage
+    });
+
+  } catch (error: any) {
+    console.error('❌ Erreur création message:', error);
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 });
   }
 }

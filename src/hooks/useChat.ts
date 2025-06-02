@@ -1,158 +1,305 @@
-// ===========================================
-// ÉTAPE 11: Hook useChat
-// FICHIER: src/hooks/useChat.ts
-// ===========================================
+// src/hooks/useChat.ts - Hook universel pour le chat
+'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
-import io, { Socket } from 'socket.io-client';
+import { io, Socket } from 'socket.io-client';
+
+// Types
+interface User {
+  id: string;
+  name?: string;
+  email?: string;
+  image?: string;
+  online?: boolean;
+}
 
 interface Message {
   id: string;
-  content: string;
   senderId: string;
-  receiverId: string;
-  matchId: string;
-  createdAt: string;
-  readAt?: string;
-  sender: {
-    id: string;
-    name: string;
-    image?: string;
-  };
+  content: string;
+  timestamp: string;
+  conversationId: string;
+  type?: string;
 }
 
-interface MatchConversation {
+interface Conversation {
   id: string;
-  users: Array<{
-    id: string;
-    name: string;
-    image?: string;
-  }>;
+  with: User;
   lastMessage?: Message;
+  lastActivity: string;
   unreadCount: number;
-  createdAt: string;
+}
+
+interface ChatStats {
+  onlineUsersCount: number;
+  conversationsCount: number;
+  totalMessages: number;
 }
 
 export const useChat = () => {
-  const [matches, setMatches] = useState<MatchConversation[]>([]);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { data: session, status } = useSession();
+  
+  // Socket et connexion
   const [socket, setSocket] = useState<Socket | null>(null);
+  const [connected, setConnected] = useState(false);
+  const [authenticated, setAuthenticated] = useState(false);
+  
+  // Données du chat
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [messages, setMessages] = useState<Map<string, Message[]>>(new Map());
+  const [activeConversation, setActiveConversation] = useState<string | null>(null);
+  const [onlineUsers, setOnlineUsers] = useState<User[]>([]);
+  
+  // État et erreurs
+  const [error, setError] = useState<string | null>(null);
+  const [stats, setStats] = useState<ChatStats>({
+    onlineUsersCount: 0,
+    conversationsCount: 0,
+    totalMessages: 0
+  });
+  
+  // Refs pour éviter les doubles connexions
+  const socketRef = useRef<Socket | null>(null);
+  const isConnectingRef = useRef(false);
 
-  const { data: session } = useSession();
+  // Configuration du socket
+  const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3001';
 
-  // Initialiser Socket.io
+  // Connexion au socket
   useEffect(() => {
-    if (!session?.user?.id) return;
+    if (status === 'loading' || !session?.user?.email || isConnectingRef.current) {
+      return;
+    }
 
-    const newSocket = io(process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3001', {
-      auth: {
-        userId: session.user.id,
-        token: session.accessToken
+    if (socketRef.current?.connected) {
+      console.log('🔄 Socket déjà connecté');
+      return;
+    }
+
+    console.log('🔌 Tentative de connexion Socket.io...');
+    isConnectingRef.current = true;
+
+    const newSocket = io(SOCKET_URL, {
+      transports: ['websocket', 'polling'],
+      timeout: 5000,
+      forceNew: true
+    });
+
+    // Événements de connexion
+    newSocket.on('connect', () => {
+      console.log('✅ Socket connecté:', newSocket.id);
+      setConnected(true);
+      setError(null);
+      
+      // Authentification automatique
+      const userData = {
+        userId: session.user.email,
+        userName: session.user.name || session.user.email?.split('@')[0],
+        avatar: session.user.image || null
+      };
+      
+      console.log('🔐 Envoi authentification:', userData);
+      newSocket.emit('authenticate', userData);
+    });
+
+    newSocket.on('disconnect', () => {
+      console.log('❌ Socket déconnecté');
+      setConnected(false);
+      setAuthenticated(false);
+    });
+
+    newSocket.on('connect_error', (error) => {
+      console.error('❌ Erreur connexion Socket:', error);
+      setError(`Erreur connexion: ${error.message}`);
+      setConnected(false);
+      isConnectingRef.current = false;
+    });
+
+    // Événements d'authentification
+    newSocket.on('authenticated', (data) => {
+      console.log('✅ Authentifié:', data);
+      setAuthenticated(true);
+      setError(null);
+      
+      // Récupérer les données initiales
+      newSocket.emit('get_conversations');
+      newSocket.emit('get_online_users');
+    });
+
+    // Événements de conversation
+    newSocket.on('conversation_ready', (data) => {
+      console.log('✅ Conversation prête:', data);
+      setActiveConversation(data.conversationId);
+      
+      if (data.messages && data.messages.length > 0) {
+        setMessages(prev => {
+          const newMessages = new Map(prev);
+          newMessages.set(data.conversationId, data.messages);
+          return newMessages;
+        });
       }
     });
 
+    newSocket.on('conversation_started', (data) => {
+      console.log('✅ Conversation démarrée:', data);
+      setActiveConversation(data.conversationId);
+      
+      if (data.messages && data.messages.length > 0) {
+        setMessages(prev => {
+          const newMessages = new Map(prev);
+          newMessages.set(data.conversationId, data.messages);
+          return newMessages;
+        });
+      }
+    });
+
+    // Événements de messages
+    newSocket.on('new_message', (data) => {
+      console.log('📨 Nouveau message:', data);
+      
+      const { message, conversationId } = data;
+      
+      setMessages(prev => {
+        const newMessages = new Map(prev);
+        const existing = newMessages.get(conversationId) || [];
+        newMessages.set(conversationId, [...existing, message]);
+        return newMessages;
+      });
+    });
+
+    // Événements d'utilisateurs
+    newSocket.on('online_users', (users) => {
+      console.log('👥 Utilisateurs en ligne:', users);
+      setOnlineUsers(users);
+      setStats(prev => ({ ...prev, onlineUsersCount: users.length }));
+    });
+
+    newSocket.on('user_online', (user) => {
+      console.log('✅ Utilisateur connecté:', user);
+      setOnlineUsers(prev => {
+        const filtered = prev.filter(u => u.id !== user.id);
+        return [...filtered, { ...user, online: true }];
+      });
+    });
+
+    newSocket.on('user_offline', (data) => {
+      console.log('❌ Utilisateur déconnecté:', data.userId);
+      setOnlineUsers(prev => prev.filter(u => u.id !== data.userId));
+    });
+
+    // Événements de conversations
+    newSocket.on('conversations_list', (conversations) => {
+      console.log('📋 Liste conversations:', conversations);
+      setConversations(conversations);
+      setStats(prev => ({ ...prev, conversationsCount: conversations.length }));
+    });
+
+    // Gestion des erreurs
+    newSocket.on('error', (error) => {
+      console.error('❌ Erreur serveur:', error);
+      setError(error.message || 'Erreur inconnue');
+    });
+
+    socketRef.current = newSocket;
     setSocket(newSocket);
+    isConnectingRef.current = false;
 
+    // Cleanup
     return () => {
-      newSocket.disconnect();
+      console.log('🧹 Nettoyage socket');
+      if (newSocket) {
+        newSocket.removeAllListeners();
+        newSocket.disconnect();
+      }
+      socketRef.current = null;
+      setSocket(null);
+      setConnected(false);
+      setAuthenticated(false);
+      isConnectingRef.current = false;
     };
-  }, [session]);
 
-  // Charger les matches
-  const loadMatches = useCallback(async () => {
-    if (!session?.user?.id) return;
+  }, [session, status, SOCKET_URL]);
 
-    setLoading(true);
-    try {
-      const response = await fetch('/api/matches');
-      if (response.ok) {
-        const data = await response.json();
-        setMatches(data.matches);
-      } else {
-        setError('Erreur lors du chargement des matches');
-      }
-    } catch (error) {
-      setError('Erreur réseau');
-    } finally {
-      setLoading(false);
+  // Fonctions du chat
+  const startConversation = useCallback((targetUserId: string) => {
+    if (!socket || !connected || !authenticated) {
+      console.warn('⚠️ Impossible de démarrer conversation: socket non prêt');
+      return;
     }
-  }, [session?.user?.id]);
 
-  // Charger les messages d'un match
-  const loadMessages = useCallback(async (matchId: string) => {
-    setLoading(true);
-    try {
-      const response = await fetch(`/api/messages?matchId=${matchId}`);
-      if (response.ok) {
-        const data = await response.json();
-        setMessages(data.messages);
-      } else {
-        setError('Erreur lors du chargement des messages');
-      }
-    } catch (error) {
-      setError('Erreur réseau');
-    } finally {
-      setLoading(false);
+    console.log('💬 Démarrage conversation avec:', targetUserId);
+    socket.emit('start_conversation', { targetUserId });
+  }, [socket, connected, authenticated]);
+
+  const sendMessage = useCallback((conversationId: string, content: string) => {
+    if (!socket || !connected || !authenticated) {
+      console.warn('⚠️ Impossible d\'envoyer message: socket non prêt');
+      return;
     }
+
+    console.log('📤 Envoi message:', { conversationId, content });
+    socket.emit('send_message', {
+      conversationId,
+      content,
+      type: 'text'
+    });
+  }, [socket, connected, authenticated]);
+
+  const openConversation = useCallback((conversationId: string) => {
+    console.log('📂 Ouverture conversation:', conversationId);
+    setActiveConversation(conversationId);
   }, []);
 
-  // Envoyer un message
-  const sendMessage = useCallback(async (content: string, matchId: string, receiverId: string) => {
-    if (!socket || !session?.user?.id) return;
+  const closeConversation = useCallback(() => {
+    console.log('📚 Fermeture conversation');
+    setActiveConversation(null);
+  }, []);
 
-    const messageData = {
-      content,
-      matchId,
-      receiverId,
-      senderId: session.user.id
-    };
+  const getActiveMessages = useCallback(() => {
+    if (!activeConversation) return [];
+    return messages.get(activeConversation) || [];
+  }, [activeConversation, messages]);
 
-    try {
-      // Envoyer via Socket.io
-      socket.emit('message:send', messageData);
+  const isUserOnline = useCallback((userId: string) => {
+    return onlineUsers.some(user => user.id === userId && user.online !== false);
+  }, [onlineUsers]);
 
-      // Aussi via API
-      await fetch('/api/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(messageData)
-      });
+  const clearError = useCallback(() => {
+    setError(null);
+  }, []);
 
-    } catch (error) {
-      setError('Erreur lors de l\'envoi du message');
-    }
-  }, [socket, session?.user?.id]);
-
-  // Marquer un message comme lu
-  const markAsRead = useCallback(async (messageId: string) => {
-    try {
-      await fetch(`/api/messages/${messageId}/read`, {
-        method: 'PATCH'
-      });
-
-      socket?.emit('message:read', messageId);
-    } catch (error) {
-      setError('Erreur lors du marquage comme lu');
-    }
-  }, [socket]);
-
-  // Charger les matches au montage
+  // Debug info
   useEffect(() => {
-    loadMatches();
-  }, [loadMatches]);
+    const totalMessages = Array.from(messages.values()).reduce(
+      (total, msgs) => total + msgs.length, 
+      0
+    );
+    setStats(prev => ({ ...prev, totalMessages }));
+  }, [messages]);
 
   return {
-    matches,
-    messages,
-    loading,
+    // État de connexion
+    connected,
+    authenticated,
     error,
-    socket,
-    loadMatches,
-    loadMessages,
+    
+    // Données
+    conversations,
+    activeConversation,
+    onlineUsers,
+    stats,
+    
+    // Actions
+    startConversation,
     sendMessage,
-    markAsRead
+    openConversation,
+    closeConversation,
+    getActiveMessages,
+    isUserOnline,
+    clearError,
+    
+    // Debug
+    socket: socketRef.current
   };
 };
