@@ -46,10 +46,10 @@ const Navbar = () => {
   const authenticatedMenuItems = [
     { name: 'Accueil', href: '/', icon: Home },
     { name: 'Dashboard', href: '/dashboard', icon: Heart },
-    { name: 'Messages', href: '/messages', icon: MessageCircle },
+    { name: 'Messages', href: '/chat', icon: MessageCircle },
     { name: 'Profil', href: '/profile', icon: User },
-    { name: 'Notifications', href: '/notifications', icon: Bell },
-    { name: 'Paramètres', href: '/settings', icon: Settings },
+    // { name: 'Notifications', href: '/notifications', icon: Bell },
+    // { name: 'Paramètres', href: '/settings', icon: Settings },
   ];
 
   // Menu items pour utilisateurs non connectés

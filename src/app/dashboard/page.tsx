@@ -79,22 +79,22 @@ export default function DashboardPage() {
       color: "from-indigo-400 to-purple-500",
       stats: "85% complété"
     },
-    {
-      title: "Recherche",
-      description: "Filtres et préférences",
-      icon: "⚙️",
-      route: "/search",
-      color: "from-teal-400 to-blue-500",
-      stats: "Critères actifs"
-    },
-    {
-      title: "Événements",
-      description: "Rencontres dans votre région",
-      icon: "🎉",
-      route: "/events",
-      color: "from-orange-400 to-red-500",
-      stats: "5 événements proches"
-    }
+    // {
+    //   title: "Recherche",
+    //   description: "Filtres et préférences",
+    //   icon: "⚙️",
+    //   route: "/search",
+    //   color: "from-teal-400 to-blue-500",
+    //   stats: "Critères actifs"
+    // },
+    // {
+    //   title: "Événements",
+    //   description: "Rencontres dans votre région",
+    //   icon: "🎉",
+    //   route: "/events",
+    //   color: "from-orange-400 to-red-500",
+    //   stats: "5 événements proches"
+    // }
   ]
 
   return (
@@ -115,7 +115,7 @@ export default function DashboardPage() {
             </div>
             
             {/* Quick stats */}
-            <div className="hidden md:flex space-x-6 bg-white rounded-2xl p-6 shadow-lg">
+            {/* <div className="hidden md:flex space-x-6 bg-white rounded-2xl p-6 shadow-lg">
               <div className="text-center">
                 <div className="text-2xl font-bold text-pink-600">127</div>
                 <div className="text-sm text-gray-500">Vues de profil</div>
@@ -128,7 +128,7 @@ export default function DashboardPage() {
                 <div className="text-2xl font-bold text-rose-600">8</div>
                 <div className="text-sm text-gray-500">Matches</div>
               </div>
-            </div>
+            </div> */}
           </div>
         </div>
 
@@ -172,7 +172,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Section activité récente */}
-        <div className="bg-white rounded-2xl p-6 shadow-lg">
+        {/* <div className="bg-white rounded-2xl p-6 shadow-lg">
           <h2 className="text-2xl font-bold text-gray-800 mb-6">Activité récente</h2>
           
           <div className="space-y-4">
@@ -222,11 +222,11 @@ export default function DashboardPage() {
               </div>
             ))}
           </div>
-        </div>
+        </div> */}
 
         {/* Section conseils du jour */}
         <div className="mt-8 bg-gradient-to-r from-pink-500 to-purple-600 rounded-2xl p-6 text-white">
-          <h3 className="text-xl font-bold mb-2">💡 Conseil du jour</h3>
+          <h3 className="text-xl font-bold mb-2">💡 Conseil du jour Amigos</h3>
           <p className="text-pink-100">
             "Ajoutez une photo de vous en train de faire une activité que vous aimez. 
             Cela augmente vos chances de match de 40% !"
@@ -235,7 +235,7 @@ export default function DashboardPage() {
             onClick={() => router.push('/profile')}
             className="mt-4 bg-white text-pink-600 px-4 py-2 rounded-lg hover:bg-pink-50 transition-colors"
           >
-            Mettre à jour mon profil
+            Mettre à jour mon profil de suite ...
           </button>
         </div>
       </div>
