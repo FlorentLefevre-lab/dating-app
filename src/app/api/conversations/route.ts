@@ -61,18 +61,7 @@ export async function GET(request: NextRequest) {
           }
         });
 
-        // Vérifier s'il y a un match officiel
-        const hasMatch = await prisma.match.findFirst({
-          where: {
-            users: {
-              every: {
-                id: { in: [userId, otherUser.id] }
-              }
-            }
-          }
-        });
-
-        // Vérifier les likes
+        // Vérifier les likes - DÉPLACÉ AVANT hasMatch
         const sentLike = await prisma.like.findFirst({
           where: { senderId: userId, receiverId: otherUser.id }
         });
@@ -80,6 +69,9 @@ export async function GET(request: NextRequest) {
         const receivedLike = await prisma.like.findFirst({
           where: { senderId: otherUser.id, receiverId: userId }
         });
+
+        // Vérifier s'il y a un match (likes mutuels)
+        const hasMatch = !!(sentLike && receivedLike);
 
         const relationshipStatus = hasMatch 
           ? 'match' 

@@ -1,3 +1,5 @@
+// prisma/schema.prisma - VERSION AMÉLIORÉE POUR CHAT ROBUSTE
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -5,32 +7,6 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-}
-
-model Account {
-  id                String  @id @default(cuid())
-  userId            String
-  type              String
-  provider          String
-  providerAccountId String
-  refresh_token     String?
-  access_token      String?
-  expires_at        Int?
-  token_type        String?
-  scope             String?
-  id_token          String?
-  session_state     String?
-  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([provider, providerAccountId])
-}
-
-model Session {
-  id           String   @id @default(cuid())
-  sessionToken String   @unique
-  userId       String
-  expires      DateTime
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model User {
@@ -58,28 +34,240 @@ model User {
   postcode             String?
   region               String?
   
-  // ✅ Relations avec noms simples et lisibles
+  // Statut de présence en ligne
+  lastSeen             DateTime?
+  isOnline             Boolean          @default(false)
+  
+  // Relations existantes
   accounts             Account[]
   sessions             Session[]
   photos               Photo[]
   preferences          UserPreferences?
   
-  // ✅ Relations de likes avec alias courts
+  // Relations de likes
   receivedLikes        Like[]           @relation("LikeReceiver")
   sentLikes            Like[]           @relation("LikeSender")
   
-  // ✅ Relations de messages avec alias courts - CHAT UNIVERSEL
+  // Relations de messages avec nouvelles fonctionnalités
   receivedMessages     Message[]        @relation("MessageReceiver")
   sentMessages         Message[]        @relation("MessageSender")
   
-  // ✅ Relations de dislikes avec alias courts
+  // Relations de dislikes
   receivedDislikes     Dislike[]        @relation("DislikeReceiver")
   sentDislikes         Dislike[]        @relation("DislikeSender")
   
-  // ✅ Relations de vues de profil avec alias courts
+  // Relations de vues de profil
   profileViewsReceived ProfileView[]    @relation("ProfileViewed")
   profileViewsGiven    ProfileView[]    @relation("ProfileViewer")
   
+  // Nouvelles relations pour le chat amélioré
+  conversationMembers  ConversationMember[]
+  messageReactions     MessageReaction[]
+  typingIndicators     TypingIndicator[]
+  messageReadReceipts  MessageReadReceipt[]
+  userSessions         UserSession[]
+  notificationSettings NotificationSettings?
+}
+
+// MODÈLE MESSAGE AMÉLIORÉ
+model Message {
+  id            String      @id @default(cuid())
+  content       String
+  senderId      String
+  receiverId    String
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  readAt        DateTime?
+  deliveredAt   DateTime?   // Nouvelle: timestamp de livraison
+  
+  // Nouvelles propriétés pour robustesse
+  messageType   MessageType @default(TEXT)
+  status        MessageStatus @default(SENT)
+  clientId      String?     // ID côté client pour éviter doublons
+  replyToId     String?     // Répondre à un message
+  editedAt      DateTime?   // Message modifié
+  deletedAt     DateTime?   // Soft delete
+  
+  // Métadonnées
+  metadata      Json?       // Données supplémentaires (taille fichier, etc.)
+  
+  // Relations
+  sender        User        @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver      User        @relation("MessageReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  replyTo       Message?    @relation("MessageReply", fields: [replyToId], references: [id])
+  replies       Message[]   @relation("MessageReply")
+  
+  // Nouvelles relations
+  attachments   MessageAttachment[]
+  reactions     MessageReaction[]
+  readReceipts  MessageReadReceipt[]
+  
+  // Index pour performance
+  @@index([senderId, receiverId, createdAt])
+  @@index([receiverId, readAt])
+  @@index([createdAt])
+  @@index([clientId]) // Pour éviter les doublons
+}
+
+// NOUVEAU: Gestion des pièces jointes
+model MessageAttachment {
+  id          String   @id @default(cuid())
+  messageId   String
+  fileName    String
+  fileSize    Int
+  fileType    String
+  fileUrl     String
+  thumbnailUrl String?
+  createdAt   DateTime @default(now())
+  
+  message     Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  
+  @@index([messageId])
+}
+
+// NOUVEAU: Réactions aux messages
+model MessageReaction {
+  id        String   @id @default(cuid())
+  messageId String
+  userId    String
+  emoji     String
+  createdAt DateTime @default(now())
+  
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([messageId, userId, emoji])
+  @@index([messageId])
+}
+
+// NOUVEAU: Accusés de réception détaillés
+model MessageReadReceipt {
+  id        String   @id @default(cuid())
+  messageId String
+  userId    String
+  readAt    DateTime @default(now())
+  
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([messageId, userId])
+  @@index([messageId])
+  @@index([userId])
+}
+
+// NOUVEAU: Indicateurs de frappe
+model TypingIndicator {
+  id             String   @id @default(cuid())
+  conversationId String
+  userId         String
+  isTyping       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([conversationId, userId])
+  @@index([conversationId])
+}
+
+// NOUVEAU: Conversations pour groupes (extensible)
+model Conversation {
+  id            String               @id @default(cuid())
+  name          String?
+  type          ConversationType     @default(DIRECT)
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  lastMessageAt DateTime?
+  
+  members       ConversationMember[]
+  
+  @@index([type])
+  @@index([lastMessageAt])
+}
+
+model ConversationMember {
+  id             String       @id @default(cuid())
+  conversationId String
+  userId         String
+  joinedAt       DateTime     @default(now())
+  leftAt         DateTime?
+  role           MemberRole   @default(MEMBER)
+  
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([conversationId, userId])
+  @@index([conversationId])
+  @@index([userId])
+}
+
+// NOUVEAU: Paramètres de notification
+model NotificationSettings {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  messageNotifications Boolean @default(true)
+  soundEnabled      Boolean  @default(true)
+  vibrationEnabled  Boolean  @default(true)
+  quietHours        Json?    // { start: "22:00", end: "08:00" }
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// NOUVEAU: Historique des sessions pour tracking
+model UserSession {
+  id          String    @id @default(cuid())
+  userId      String
+  deviceInfo  Json?     // User agent, IP, etc.
+  startedAt   DateTime  @default(now())
+  endedAt     DateTime?
+  isActive    Boolean   @default(true)
+  
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, isActive])
+  @@index([startedAt])
+}
+
+// NOUVEAU: Statistiques pour monitoring
+model ChatStatistics {
+  id                 String   @id @default(cuid())
+  date               DateTime @unique @default(now())
+  totalMessages      Int      @default(0)
+  totalActiveUsers   Int      @default(0)
+  totalConversations Int      @default(0)
+  averageResponseTime Float?   // En secondes
+  createdAt          DateTime @default(now())
+  
+  @@index([date])
+}
+
+// Modèles existants inchangés...
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Photo {
@@ -142,20 +330,6 @@ model ProfileView {
   @@map("profile_views")
 }
 
-// ✅ MODÈLE MESSAGE - CHAT UNIVERSEL SANS MATCH
-model Message {
-  id         String    @id @default(cuid())
-  content    String
-  senderId   String
-  receiverId String
-  createdAt  DateTime  @default(now())
-  readAt     DateTime?
-  
-  // ✅ Relations directes utilisateur à utilisateur - PAS DE MATCH
-  receiver   User      @relation("MessageReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
-  sender     User      @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
-}
-
 model EmailVerificationToken {
   id        String   @id @default(cuid())
   email     String
@@ -184,10 +358,42 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
+// ENUMS NOUVEAUX ET AMÉLIORÉS
 enum AuthMethod {
   EMAIL_PASSWORD
   GOOGLE
   FACEBOOK
   TWITTER
   APPLE
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  VIDEO
+  AUDIO
+  FILE
+  LOCATION
+  STICKER
+  GIF
+}
+
+enum MessageStatus {
+  SENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+enum ConversationType {
+  DIRECT      // Conversation 1-to-1
+  GROUP       // Conversation de groupe
+  BROADCAST   // Diffusion (1-to-many)
+}
+
+enum MemberRole {
+  ADMIN
+  MODERATOR
+  MEMBER
 }

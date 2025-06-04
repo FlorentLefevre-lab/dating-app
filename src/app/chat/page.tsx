@@ -1,10 +1,9 @@
-// src/app/chat/page.tsx
+// src/app/chat/page.tsx - Page d'intégration complète
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
-import { ChatSystem } from '@/components/chat/ChatSystem';
+import React, { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { 
   MessageCircle, 
   Users, 
@@ -12,14 +11,17 @@ import {
   Search, 
   Heart,
   Sparkles,
-  Clock,
   Send,
-  UserPlus,
-  Star,
+  Phone,
+  Video,
   Wifi,
-  WifiOff
+  WifiOff,
+  Archive,
+  RefreshCw,
+  Settings,
+  UserPlus
 } from 'lucide-react';
-import io, { Socket } from 'socket.io-client';
+import ChatSystem from './../../components/chat/ChatSystem';
 
 // Types
 interface User {
@@ -34,24 +36,41 @@ interface User {
   interests?: string[];
 }
 
+interface Conversation {
+  id: string;
+  type: string;
+  users: User[];
+  lastMessage?: {
+    id: string;
+    content: string;
+    senderId: string;
+    receiverId: string;
+    createdAt: string;
+    readAt?: string | null;
+    type: string;
+    attachments: any[];
+    sender: User;
+  };
+  unreadCount: number;
+  messageCount?: number;
+  lastActivity?: string;
+  createdAt: string;
+  relationshipStatus: string;
+  hasMatch: boolean;
+  metadata?: {
+    canMessage: boolean;
+    isMatch?: boolean;
+    sentLike?: boolean;
+    receivedLike?: boolean;
+    mutualLike?: boolean;
+  };
+}
+
 interface Match {
   id: string;
   user: User;
   matchedAt: string;
   compatibility?: number;
-}
-
-interface Conversation {
-  id: string;
-  user: User;
-  lastMessage?: {
-    content: string;
-    senderId: string;
-    createdAt: string;
-  };
-  messageCount: number;
-  unreadCount: number;
-  lastActivity: string;
 }
 
 interface ChatState {
@@ -64,7 +83,7 @@ export default function ChatPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   
-  // États
+  // États principaux
   const [chatState, setChatState] = useState<ChatState>({
     mode: 'dashboard',
     selectedUser: null
@@ -74,74 +93,12 @@ export default function ChatPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'conversations' | 'matches'>('conversations');
-  
-  // États Socket.IO
-  const [socket, setSocket] = useState<Socket | null>(null);
-  const [socketConnected, setSocketConnected] = useState(false);
-  const [socketError, setSocketError] = useState<string | null>(null);
-  const socketRef = useRef<Socket | null>(null);
+  const [activeTab, setActiveTab] = useState<'conversations' | 'matches' | 'discover'>('conversations');
+  const [searchQuery, setSearchQuery] = useState('');
 
-  // Initialiser Socket.IO
-  const initializeSocket = () => {
-    if (socketRef.current) {
-      socketRef.current.disconnect();
-    }
-
-    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3000';
-    
-    console.log('🔌 Tentative de connexion Socket.IO à:', socketUrl);
-    
-    const newSocket = io(socketUrl, {
-      path: '/api/socketio',  // ← AJOUTEZ cette ligne !
-      transports: ['websocket', 'polling'],
-      timeout: 5000,
-      forceNew: true,
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000
-    });
-
-    newSocket.on('connect', () => {
-      console.log('✅ Socket.IO connecté:', newSocket.id);
-      setSocketConnected(true);
-      setSocketError(null);
-      
-      // Authentifier l'utilisateur
-      if (currentUser) {
-        newSocket.emit('user:authenticate', {
-          userId: currentUser.id,
-          userEmail: currentUser.email,
-          userName: currentUser.name
-        });
-      }
-    });
-
-    newSocket.on('disconnect', (reason) => {
-      console.log('❌ Socket.IO déconnecté:', reason);
-      setSocketConnected(false);
-    });
-
-    newSocket.on('connect_error', (error) => {
-      console.error('💥 Erreur connexion Socket.IO:', error);
-      setSocketError(`Erreur de connexion: ${error.message}`);
-      setSocketConnected(false);
-    });
-
-    newSocket.on('reconnect', (attemptNumber) => {
-      console.log('🔄 Socket.IO reconnecté après', attemptNumber, 'tentatives');
-      setSocketConnected(true);
-      setSocketError(null);
-    });
-
-    newSocket.on('reconnect_error', (error) => {
-      console.error('💥 Erreur de reconnexion:', error);
-      setSocketError(`Erreur de reconnexion: ${error.message}`);
-    });
-
-    socketRef.current = newSocket;
-    setSocket(newSocket);
-  };
+  // États de connexion
+  const [isOnline, setIsOnline] = useState(navigator?.onLine ?? true);
+  const [serverStatus, setServerStatus] = useState<any>(null);
 
   // Charger l'utilisateur actuel
   const loadCurrentUser = async () => {
@@ -158,13 +115,13 @@ export default function ChatPage() {
     return null;
   };
 
-  // Charger les conversations avec messages
+  // Charger les conversations
   const loadConversations = async () => {
     try {
-      const response = await fetch('/api/chat/conversations');
+      const response = await fetch('/api/conversations');
       if (response.ok) {
         const data = await response.json();
-        if (data.success) {
+        if (data.conversations) {
           setConversations(data.conversations || []);
         }
       }
@@ -173,22 +130,37 @@ export default function ChatPage() {
     }
   };
 
-  // Charger les matchs sans conversation encore
+  // Charger les matchs
   const loadMatches = async () => {
     try {
       const response = await fetch('/api/matches');
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
-          // Filtrer les matchs qui n'ont pas encore de conversation
           const matchesWithoutConvo = data.matches.filter((match: Match) => 
-            !conversations.some(conv => conv.user.id === match.user.id)
+            !conversations.some(conv => {
+              const otherUser = conv.users?.find(u => u.id !== currentUser?.id);
+              return otherUser?.id === match.user.id;
+            })
           );
           setMatches(matchesWithoutConvo);
         }
       }
     } catch (error) {
       console.error('Erreur chargement matchs:', error);
+    }
+  };
+
+  // Vérifier le statut du serveur
+  const checkServerStatus = async () => {
+    try {
+      const response = await fetch('/api/socket-stats');
+      if (response.ok) {
+        const data = await response.json();
+        setServerStatus(data);
+      }
+    } catch (error) {
+      console.error('Erreur statut serveur:', error);
     }
   };
 
@@ -206,27 +178,27 @@ export default function ChatPage() {
         setIsLoading(true);
         setError(null);
 
-        // Charger l'utilisateur d'abord
         const user = await loadCurrentUser();
         
         if (user) {
-          // Initialiser le socket après avoir l'utilisateur
-          initializeSocket();
-          
-          // Charger les données en parallèle
           await Promise.all([
             loadConversations(),
-            loadMatches()
+            loadMatches(),
+            checkServerStatus()
           ]);
 
           // Vérifier si on a un chat direct via URL
           const userIdParam = searchParams.get('userId');
           if (userIdParam) {
-            // Trouver l'utilisateur dans les conversations ou matchs
-            let targetUser = conversations.find(conv => conv.user.id === userIdParam)?.user;
-            if (!targetUser) {
-              targetUser = matches.find(match => match.user.id === userIdParam)?.user;
-            }
+            // Chercher dans les conversations
+            const targetConversation = conversations.find(conv => {
+              const otherUser = conv.users?.find(u => u.id !== user.id);
+              return otherUser?.id === userIdParam;
+            });
+
+            const targetUser = targetConversation 
+              ? targetConversation.users.find(u => u.id !== user.id)
+              : matches.find(match => match.user.id === userIdParam)?.user;
 
             if (targetUser) {
               setChatState({
@@ -250,21 +222,24 @@ export default function ChatPage() {
     initializePage();
   }, [status, router, searchParams]);
 
-  // Recharger les matchs après le chargement des conversations
+  // Recharger les matchs après les conversations
   useEffect(() => {
-    if (conversations.length > 0) {
+    if (conversations.length > 0 && currentUser) {
       loadMatches();
     }
-  }, [conversations]);
+  }, [conversations, currentUser]);
 
-  // Nettoyage Socket.IO
+  // Gestion de la connectivité
   useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
     return () => {
-      if (socketRef.current) {
-        console.log('🧹 Nettoyage Socket.IO');
-        socketRef.current.disconnect();
-        socketRef.current = null;
-      }
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
     };
   }, []);
 
@@ -283,18 +258,25 @@ export default function ChatPage() {
       mode: 'dashboard',
       selectedUser: null
     });
-    // Recharger les données au retour
     loadConversations();
     loadMatches();
+    checkServerStatus();
   };
 
-  // Test de connexion socket
-  const testSocketConnection = () => {
-    if (socket) {
-      socket.emit('test:connection', { timestamp: Date.now() });
-      console.log('🧪 Test de connexion envoyé');
-    }
-  };
+  // Filtrer les éléments par recherche
+  const filteredConversations = conversations.filter(conv => {
+    // Trouver l'autre utilisateur dans la conversation
+    const otherUser = conv.users?.find(u => u.id !== currentUser?.id);
+    return otherUser && (
+      otherUser.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      otherUser.email?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  });
+
+  const filteredMatches = matches.filter(match =>
+    match.user.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    match.user.email?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   // Calculer le temps depuis la dernière activité
   const getTimeAgo = (dateString: string) => {
@@ -320,9 +302,12 @@ export default function ChatPage() {
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-600 mx-auto mb-4"></div>
           <p className="text-gray-600">Chargement de vos conversations...</p>
-          <p className="text-xs text-gray-500 mt-2">
-            Socket: {socketConnected ? '🟢 Connecté' : '🔴 Déconnecté'}
-          </p>
+          <div className="mt-2 flex items-center justify-center space-x-4 text-xs text-gray-500">
+            <span>Réseau: {isOnline ? '🌐 En ligne' : '📡 Hors ligne'}</span>
+            {serverStatus && (
+              <span>Serveur: {serverStatus.connectedUsers} connectés</span>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -338,14 +323,6 @@ export default function ChatPage() {
             <h2 className="text-lg font-semibold">Erreur de Chat</h2>
           </div>
           <p className="text-gray-600 text-center mb-4">{error}</p>
-          {socketError && (
-            <div className="bg-red-50 border border-red-200 rounded p-3 mb-4">
-              <p className="text-red-700 text-sm">{socketError}</p>
-              <p className="text-xs text-red-600 mt-1">
-                URL: {process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3000'}
-              </p>
-            </div>
-          )}
           <div className="space-y-2">
             <button
               onClick={() => window.location.reload()}
@@ -354,10 +331,10 @@ export default function ChatPage() {
               Recharger
             </button>
             <button
-              onClick={initializeSocket}
+              onClick={checkServerStatus}
               className="w-full px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
             >
-              Reconnecter Socket
+              Vérifier le serveur
             </button>
           </div>
         </div>
@@ -370,7 +347,7 @@ export default function ChatPage() {
     return (
       <div className="h-screen bg-gray-50">
         <div className="container mx-auto h-full max-w-4xl">
-          {/* Header avec bouton retour et statut socket */}
+          {/* Header avec bouton retour */}
           <div className="bg-white border-b px-4 py-3 flex items-center justify-between">
             <div className="flex items-center">
               <button
@@ -383,7 +360,15 @@ export default function ChatPage() {
               
               <div className="flex items-center space-x-3">
                 <div className="w-10 h-10 bg-gradient-to-br from-pink-400 to-purple-600 rounded-full flex items-center justify-center text-white font-bold">
-                  {chatState.selectedUser.name?.charAt(0) || '?'}
+                  {chatState.selectedUser.image ? (
+                    <img
+                      src={chatState.selectedUser.image}
+                      alt={chatState.selectedUser.name}
+                      className="w-10 h-10 rounded-full object-cover"
+                    />
+                  ) : (
+                    chatState.selectedUser.name?.charAt(0) || '?'
+                  )}
                 </div>
                 <div>
                   <h3 className="font-semibold">{chatState.selectedUser.name}</h3>
@@ -395,33 +380,22 @@ export default function ChatPage() {
               </div>
             </div>
 
-            {/* Statut Socket */}
+            {/* Statuts système */}
             <div className="flex items-center space-x-2">
               <div className={`flex items-center space-x-1 px-3 py-1 rounded-full text-xs ${
-                socketConnected 
+                isOnline 
                   ? 'bg-green-100 text-green-700' 
                   : 'bg-red-100 text-red-700'
               }`}>
-                {socketConnected ? <Wifi size={12} /> : <WifiOff size={12} />}
-                <span>{socketConnected ? 'Connecté' : 'Déconnecté'}</span>
+                {isOnline ? <Wifi size={12} /> : <WifiOff size={12} />}
+                <span>{isOnline ? 'En ligne' : 'Hors ligne'}</span>
               </div>
               
-              {!socketConnected && (
-                <button
-                  onClick={initializeSocket}
-                  className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
-                >
-                  Reconnecter
-                </button>
+              {serverStatus && (
+                <div className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-full">
+                  {serverStatus.connectedUsers} connectés
+                </div>
               )}
-              
-              <button
-                onClick={testSocketConnection}
-                className="px-3 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700"
-                disabled={!socketConnected}
-              >
-                Test
-              </button>
             </div>
           </div>
           
@@ -429,7 +403,6 @@ export default function ChatPage() {
             <ChatSystem
               currentUser={currentUser}
               remoteUser={chatState.selectedUser}
-              socket={socket} // ✅ AJOUTÉ: Passer le socket
               onClose={backToDashboard}
             />
           </div>
@@ -438,35 +411,26 @@ export default function ChatPage() {
     );
   }
 
-  // Mode Dashboard - Vue d'ensemble des conversations et matchs
+  // Mode Dashboard - Vue d'ensemble
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="container mx-auto max-w-4xl p-4">
-        {/* En-tête avec statut socket */}
+      <div className="container mx-auto max-w-6xl p-4">
+        {/* Header principal */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold text-gray-900 flex items-center space-x-3">
                 <MessageCircle className="text-pink-600" />
                 <span>Messages</span>
-                {socketConnected ? (
+                {isOnline ? (
                   <Wifi className="text-green-600" size={24} />
                 ) : (
                   <WifiOff className="text-red-600" size={24} />
                 )}
               </h1>
-              <div className="flex items-center space-x-4 mt-1">
-                <p className="text-gray-600">
-                  Vos conversations et nouveaux matchs
-                </p>
-                <div className={`flex items-center space-x-1 px-2 py-1 rounded text-xs ${
-                  socketConnected 
-                    ? 'bg-green-100 text-green-700' 
-                    : 'bg-red-100 text-red-700'
-                }`}>
-                  <span>{socketConnected ? '🟢 Socket Connecté' : '🔴 Socket Déconnecté'}</span>
-                </div>
-              </div>
+              <p className="text-gray-600 mt-1">
+                Vos conversations et nouveaux matchs
+              </p>
             </div>
             
             <div className="text-right">
@@ -478,39 +442,38 @@ export default function ChatPage() {
                 {matches.length} nouveau{matches.length > 1 ? 'x' : ''} match{matches.length > 1 ? 's' : ''}
               </div>
               
-              {/* Boutons de debug socket */}
-              <div className="flex space-x-2 mt-2">
-                {!socketConnected && (
-                  <button
-                    onClick={initializeSocket}
-                    className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
-                  >
-                    Reconnecter Socket
-                  </button>
-                )}
-                <button
-                  onClick={testSocketConnection}
-                  className="px-3 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700"
-                  disabled={!socketConnected}
-                >
-                  Test Socket
-                </button>
-              </div>
+              {serverStatus && (
+                <div className="mt-2 bg-blue-50 border border-blue-200 rounded p-2">
+                  <div className="text-blue-700 text-sm font-medium">
+                    🚀 Serveur WebRTC actif
+                  </div>
+                  <div className="text-blue-600 text-xs">
+                    {serverStatus.connectedUsers} utilisateurs connectés
+                  </div>
+                  <div className="text-blue-600 text-xs">
+                    Fonctionnalités: {serverStatus.features?.join(', ')}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
-          
-          {/* Affichage des erreurs socket */}
-          {socketError && (
-            <div className="mt-4 bg-red-50 border border-red-200 rounded p-3">
-              <p className="text-red-700 text-sm">{socketError}</p>
-              <p className="text-xs text-red-600 mt-1">
-                URL: {process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3000'}
-              </p>
-            </div>
-          )}
         </div>
 
-        {/* Tabs */}
+        {/* Barre de recherche */}
+        <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+            <input
+              type="text"
+              placeholder="Rechercher une conversation ou un match..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500"
+            />
+          </div>
+        </div>
+
+        {/* Navigation par onglets */}
         <div className="bg-white rounded-lg shadow-sm mb-6">
           <div className="flex border-b">
             <button
@@ -523,7 +486,12 @@ export default function ChatPage() {
             >
               <div className="flex items-center justify-center space-x-2">
                 <MessageCircle size={18} />
-                <span>Conversations ({conversations.length})</span>
+                <span>Conversations ({filteredConversations.length})</span>
+                {conversations.some(c => c.unreadCount > 0) && (
+                  <div className="bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                    {conversations.reduce((sum, c) => sum + c.unreadCount, 0)}
+                  </div>
+                )}
               </div>
             </button>
             
@@ -537,50 +505,70 @@ export default function ChatPage() {
             >
               <div className="flex items-center justify-center space-x-2">
                 <Heart size={18} />
-                <span>Nouveaux matchs ({matches.length})</span>
+                <span>Nouveaux matchs ({filteredMatches.length})</span>
+              </div>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('discover')}
+              className={`flex-1 px-6 py-4 font-medium text-center transition-colors ${
+                activeTab === 'discover'
+                  ? 'text-pink-600 border-b-2 border-pink-600 bg-pink-50'
+                  : 'text-gray-600 hover:text-gray-800'
+              }`}
+            >
+              <div className="flex items-center justify-center space-x-2">
+                <Users size={18} />
+                <span>Découvrir</span>
               </div>
             </button>
           </div>
         </div>
 
-        {/* Contenu des tabs */}
+        {/* Contenu des onglets */}
         {activeTab === 'conversations' && (
           <div className="space-y-4">
-            {conversations.length === 0 ? (
+            {filteredConversations.length === 0 ? (
               <div className="bg-white rounded-lg shadow-sm p-8 text-center">
                 <MessageCircle className="mx-auto h-12 w-12 text-gray-400 mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 mb-2">
-                  Aucune conversation en cours
+                  {searchQuery ? 'Aucune conversation trouvée' : 'Aucune conversation en cours'}
                 </h3>
                 <p className="text-gray-500 mb-4">
-                  Commencez à chatter avec vos matchs !
+                  {searchQuery ? 'Essayez avec d\'autres mots-clés' : 'Commencez à chatter avec vos matchs !'}
                 </p>
-                <button
-                  onClick={() => setActiveTab('matches')}
-                  className="px-6 py-3 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-colors"
-                >
-                  Voir vos matchs
-                </button>
+                {!searchQuery && (
+                  <button
+                    onClick={() => setActiveTab('matches')}
+                    className="px-6 py-3 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition-colors"
+                  >
+                    Voir vos matchs
+                  </button>
+                )}
               </div>
             ) : (
-              conversations.map((conversation) => (
+              filteredConversations.map((conversation) => {
+                // Trouver l'autre utilisateur dans la conversation
+                const otherUser = conversation.users?.find(u => u.id !== currentUser?.id);
+                if (!otherUser) return null;
+                
+                return (
                 <div
                   key={conversation.id}
-                  onClick={() => startConversation(conversation.user)}
+                  onClick={() => startConversation(otherUser)}
                   className="bg-white rounded-lg shadow-sm p-4 hover:shadow-md transition-shadow cursor-pointer border border-gray-200"
                 >
                   <div className="flex items-center space-x-4">
-                    {/* Avatar */}
                     <div className="relative">
-                      {conversation.user.image ? (
+                      {otherUser.image ? (
                         <img
-                          src={conversation.user.image}
-                          alt={conversation.user.name}
+                          src={otherUser.image}
+                          alt={otherUser.name}
                           className="w-14 h-14 rounded-full object-cover"
                         />
                       ) : (
                         <div className="w-14 h-14 bg-gradient-to-br from-pink-400 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-lg">
-                          {conversation.user.name?.charAt(0) || '?'}
+                          {otherUser.name?.charAt(0) || '?'}
                         </div>
                       )}
                       
@@ -591,14 +579,13 @@ export default function ChatPage() {
                       )}
                     </div>
 
-                    {/* Contenu */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-1">
                         <h3 className="font-semibold text-gray-900 truncate">
-                          {conversation.user.name || conversation.user.email?.split('@')[0]}
+                          {otherUser.name || otherUser.email?.split('@')[0]}
                         </h3>
                         <span className="text-xs text-gray-500">
-                          {getTimeAgo(conversation.lastActivity)}
+                          {getTimeAgo(conversation.lastActivity || conversation.createdAt)}
                         </span>
                       </div>
                       
@@ -611,44 +598,48 @@ export default function ChatPage() {
                       
                       <div className="flex items-center justify-between mt-2">
                         <span className="text-xs text-gray-500">
-                          {conversation.messageCount} message{conversation.messageCount > 1 ? 's' : ''}
+                          {conversation.messageCount || 0} message{(conversation.messageCount || 0) > 1 ? 's' : ''}
                         </span>
-                        <Send size={14} className="text-gray-400" />
+                        <div className="flex items-center space-x-1">
+                          {conversation.hasMatch && <Heart className="text-red-400" size={12} />}
+                          <Send size={14} className="text-gray-400" />
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              ))
+              )})
             )}
           </div>
         )}
 
         {activeTab === 'matches' && (
           <div className="space-y-4">
-            {matches.length === 0 ? (
+            {filteredMatches.length === 0 ? (
               <div className="bg-white rounded-lg shadow-sm p-8 text-center">
                 <Heart className="mx-auto h-12 w-12 text-gray-400 mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 mb-2">
-                  Aucun nouveau match
+                  {searchQuery ? 'Aucun match trouvé' : 'Aucun nouveau match'}
                 </h3>
                 <p className="text-gray-500 mb-4">
-                  Continuez à swiper pour trouver de nouveaux matchs !
+                  {searchQuery ? 'Essayez avec d\'autres mots-clés' : 'Continuez à swiper pour trouver de nouveaux matchs !'}
                 </p>
-                <button
-                  onClick={() => router.push('/discover')}
-                  className="px-6 py-3 bg-gradient-to-r from-pink-500 to-purple-600 text-white rounded-lg hover:from-pink-600 hover:to-purple-700 transition-all"
-                >
-                  Découvrir des profils
-                </button>
+                {!searchQuery && (
+                  <button
+                    onClick={() => router.push('/discover')}
+                    className="px-6 py-3 bg-gradient-to-r from-pink-500 to-purple-600 text-white rounded-lg hover:from-pink-600 hover:to-purple-700 transition-all"
+                  >
+                    Découvrir des profils
+                  </button>
+                )}
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {matches.map((match) => (
+                {filteredMatches.map((match) => (
                   <div
                     key={match.id}
                     className="bg-white rounded-lg shadow-sm overflow-hidden hover:shadow-md transition-shadow border border-gray-200"
                   >
-                    {/* Photo */}
                     <div className="relative h-32">
                       {match.user.image ? (
                         <img
@@ -664,14 +655,12 @@ export default function ChatPage() {
                         </div>
                       )}
                       
-                      {/* Badge nouveau match */}
                       <div className="absolute top-2 left-2">
                         <span className="bg-yellow-500 text-white text-xs px-2 py-1 rounded-full font-semibold">
                           Nouveau match
                         </span>
                       </div>
                       
-                      {/* Score de compatibilité */}
                       {match.compatibility && (
                         <div className="absolute top-2 right-2">
                           <div className="bg-white bg-opacity-90 text-pink-600 text-xs font-bold px-2 py-1 rounded-full">
@@ -681,7 +670,6 @@ export default function ChatPage() {
                       )}
                     </div>
 
-                    {/* Infos */}
                     <div className="p-4">
                       <h3 className="font-semibold text-gray-900 mb-1">
                         {match.user.name || match.user.email?.split('@')[0]}
@@ -692,13 +680,21 @@ export default function ChatPage() {
                         {match.user.age && ` • ${match.user.age} ans`}
                       </p>
                       
-                      <button
-                        onClick={() => startConversation(match.user)}
-                        className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-gradient-to-r from-pink-500 to-purple-600 text-white rounded-lg hover:from-pink-600 hover:to-purple-700 transition-all"
-                      >
-                        <Send size={16} />
-                        <span>Envoyer un message</span>
-                      </button>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => startConversation(match.user)}
+                          className="flex-1 flex items-center justify-center space-x-2 px-4 py-2 bg-gradient-to-r from-pink-500 to-purple-600 text-white rounded-lg hover:from-pink-600 hover:to-purple-700 transition-all"
+                        >
+                          <Send size={16} />
+                          <span>Message</span>
+                        </button>
+                        <button className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                          <Phone size={16} className="text-gray-600" />
+                        </button>
+                        <button className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                          <Video size={16} className="text-gray-600" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -707,8 +703,35 @@ export default function ChatPage() {
           </div>
         )}
 
+        {activeTab === 'discover' && (
+          <div className="bg-white rounded-lg shadow-sm p-8 text-center">
+            <Users className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              Découvrez de nouveaux profils
+            </h3>
+            <p className="text-gray-500 mb-4">
+              Explorez et rencontrez de nouvelles personnes compatibles avec vous
+            </p>
+            <button
+              onClick={() => router.push('/discover')}
+              className="px-6 py-3 bg-gradient-to-r from-pink-500 to-purple-600 text-white rounded-lg hover:from-pink-600 hover:to-purple-700 transition-all flex items-center space-x-2 mx-auto"
+            >
+              <Sparkles size={20} />
+              <span>Commencer à découvrir</span>
+            </button>
+          </div>
+        )}
+
         {/* Action flottante */}
-        <div className="fixed bottom-6 right-6">
+        <div className="fixed bottom-6 right-6 flex flex-col space-y-3">
+          <button
+            onClick={checkServerStatus}
+            className="w-12 h-12 bg-blue-500 text-white rounded-full shadow-lg hover:shadow-xl hover:bg-blue-600 transition-all duration-200 flex items-center justify-center"
+            title="Statut serveur"
+          >
+            <RefreshCw size={20} />
+          </button>
+          
           <button
             onClick={() => router.push('/discover')}
             className="w-14 h-14 bg-gradient-to-r from-pink-500 to-purple-600 text-white rounded-full shadow-lg hover:shadow-xl hover:from-pink-600 hover:to-purple-700 transition-all duration-200 flex items-center justify-center group"
