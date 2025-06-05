@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '../auth/[...nextauth]/route';
+import { auth } from '../../../auth'
+const session = await auth()
 import { prisma } from '../../../lib/prisma';
 import type { SendMessageRequest, PrismaMessage } from '../../../types/chat';
 
@@ -13,16 +13,30 @@ export async function POST(request: NextRequest) {
 
   try {
     const body: SendMessageRequest = await request.json();
-    const { senderId, receiverId, content, clientId } = body;
+    const { senderId, receiverId, content, clientId, firebaseId } = body;
 
     // Vérifier que l'utilisateur peut envoyer le message
     if (session.user.id !== senderId) {
       return NextResponse.json({ error: 'Interdit' }, { status: 403 });
     }
 
+    // Vérifier que les utilisateurs ne sont pas bloqués
+    const blockExists = await prisma.block.findFirst({
+      where: {
+        OR: [
+          { blockerId: senderId, blockedId: receiverId },
+          { blockerId: receiverId, blockedId: senderId }
+        ]
+      }
+    });
+
+    if (blockExists) {
+      return NextResponse.json({ error: 'Utilisateur bloqué' }, { status: 403 });
+    }
+
     const message = await prisma.message.create({
       data: {
-        content,
+        content: content.trim(),
         senderId,
         receiverId,
         clientId,
@@ -31,6 +45,9 @@ export async function POST(request: NextRequest) {
       },
       include: {
         sender: {
+          select: { id: true, name: true, image: true }
+        },
+        receiver: {
           select: { id: true, name: true, image: true }
         }
       }
@@ -55,23 +72,33 @@ export async function GET(request: NextRequest) {
     const conversationWith = searchParams.get('conversationWith');
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '50');
+    const before = searchParams.get('before'); // Pour la pagination
     const userId = session.user.id;
 
     if (!conversationWith) {
       return NextResponse.json({ error: 'conversationWith requis' }, { status: 400 });
     }
 
+    // Construire la condition where
+    const whereCondition: any = {
+      OR: [
+        { senderId: userId, receiverId: conversationWith },
+        { senderId: conversationWith, receiverId: userId }
+      ],
+      deletedAt: null
+    };
+
+    // Ajouter la pagination par cursor si fournie
+    if (before) {
+      whereCondition.createdAt = {
+        lt: new Date(before)
+      };
+    }
+
     const messages: PrismaMessage[] = await prisma.message.findMany({
-      where: {
-        OR: [
-          { senderId: userId, receiverId: conversationWith },
-          { senderId: conversationWith, receiverId: userId }
-        ],
-        deletedAt: null
-      },
+      where: whereCondition,
       orderBy: { createdAt: 'desc' },
       take: limit,
-      skip: (page - 1) * limit,
       include: {
         sender: { 
           select: { id: true, name: true, image: true } 

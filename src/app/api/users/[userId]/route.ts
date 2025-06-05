@@ -1,6 +1,5 @@
 // src/app/api/users/[userId]/route.ts - API pour récupérer un utilisateur spécifique
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/lib/auth';
+import { auth } from '../../../../auth'
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 
@@ -11,7 +10,7 @@ export async function GET(
   console.log('🔍 API Users - Récupération utilisateur:', params.userId);
   
   try {
-    const session = await getServerSession(authOptions);
+    const session = await auth()
     
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });

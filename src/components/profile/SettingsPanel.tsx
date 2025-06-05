@@ -1,4 +1,4 @@
-// components/profile/SettingsPanel.tsx
+'use client';
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { signOut } from 'next-auth/react';
@@ -10,16 +10,10 @@ import {
   EyeIcon,
   LockClosedIcon
 } from '@heroicons/react/24/outline';
-import { UserProfile, Photo } from  '../../types/profiles';
 
-interface Props {
-  profile: UserProfile | null;
-  photos: Photo[];
-  session: any;
-  onMessage: (message: string, type?: 'success' | 'error') => void;
-}
+import { SettingsPanelProps } from '../../types/profiles';
 
-const SettingsPanel: React.FC<Props> = ({ 
+const SettingsPanel: React.FC<SettingsPanelProps> = ({ 
   profile, 
   photos, 
   session, 

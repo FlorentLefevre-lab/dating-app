@@ -1,7 +1,7 @@
 // src/app/api/profile/photos/[photoId]/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/lib/auth';
+import { auth } from '../../../../../auth'
+const session = await auth()
 import { PrismaClient } from '@prisma/client';
 
 // Singleton pour Prisma

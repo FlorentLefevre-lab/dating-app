@@ -1,5 +1,6 @@
+// src/lib/firebase.ts
 import { initializeApp, getApps } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -13,3 +14,13 @@ const firebaseConfig = {
 // Éviter la double initialisation
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 export const db = getFirestore(app);
+
+// Connexion à l'émulateur en développement (optionnel)
+if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
+  try {
+    connectFirestoreEmulator(db, 'localhost', 8080);
+  } catch (error) {
+    // Émulateur déjà connecté ou indisponible
+    console.log('Firebase emulator already connected or unavailable');
+  }
+}

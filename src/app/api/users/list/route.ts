@@ -1,6 +1,6 @@
 // src/app/api/users/list/route.ts - API pour lister tous les utilisateurs
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/lib/auth';
+import { auth } from '../../../../auth'
+const session = await auth()
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {

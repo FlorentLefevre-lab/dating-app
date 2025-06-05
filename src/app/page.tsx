@@ -43,30 +43,28 @@ export default function HomePage() {
 
   const handleGetStarted = () => {
     if (session) {
-      router.push('/dashboard')  // ← Changé de /profile vers /dashboard
+      router.push('/dashboard')
     } else {
       router.push('/auth/register')
     }
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-pink-100 to-purple-100">
+    <div className="min-h-screen">
       {/* Navigation */}
       <Navbar />
 
       {/* Hero Section */}
       <section className="relative overflow-hidden py-20 lg:py-32">
-        <div className="absolute inset-0 bg-gradient-to-r from-pink-600/10 to-purple-600/10"></div>
-        
         {/* Decorative elements */}
-        <div className="absolute top-20 left-10 animate-pulse">
-          <div className="w-8 h-8 text-pink-300 text-2xl">💖</div>
+        <div className="absolute top-20 left-10 animate-float">
+          <div className="w-8 h-8 text-primary-400 text-2xl">💖</div>
         </div>
-        <div className="absolute top-40 right-20 animate-bounce">
-          <div className="w-6 h-6 text-purple-300 text-xl">✨</div>
+        <div className="absolute top-40 right-20 animate-bounce-slow">
+          <div className="w-6 h-6 text-secondary-400 text-xl">✨</div>
         </div>
-        <div className="absolute bottom-20 left-1/4 animate-pulse">
-          <div className="w-6 h-6 text-pink-400 text-xl">💕</div>
+        <div className="absolute bottom-20 left-1/4 animate-pulse-slow">
+          <div className="w-6 h-6 text-primary-500 text-xl">💕</div>
         </div>
 
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -76,16 +74,16 @@ export default function HomePage() {
                 <h1 className="text-5xl lg:text-7xl font-bold leading-tight">
                   <span className="text-4xl">💕</span>
                   <br />
-                  <span className="bg-gradient-to-r from-pink-600 via-rose-500 to-purple-600 bg-clip-text text-transparent">
+                  <span className="gradient-text">
                     Bienvenue sur
                   </span>
                   <br />
-                  <span className="text-gray-800">
+                  <span className="text-neutral-800 dark:text-neutral-200">
                     Flow Dating
                   </span>
                 </h1>
                 
-                <p className="text-xl text-gray-600 leading-relaxed">
+                <p className="text-xl text-neutral-600 dark:text-neutral-400 leading-relaxed">
                   Trouvez l'amour de votre vie avec notre plateforme nouvelle génération. 
                   Des connexions authentiques vous attendent.
                 </p>
@@ -94,7 +92,7 @@ export default function HomePage() {
               <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
                 <button 
                   onClick={handleGetStarted}
-                  className="group bg-gradient-to-r from-pink-500 to-purple-600 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:from-pink-600 hover:to-purple-700 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl flex items-center justify-center space-x-2"
+                  className="btn-primary flex items-center justify-center space-x-2"
                 >
                   <span>
                     {session ? 'Accéder à mon tableau de bord' : 'S\'inscrire'}
@@ -105,7 +103,7 @@ export default function HomePage() {
                 {!session && (
                   <button 
                     onClick={() => router.push('/auth/login')}
-                    className="bg-white/80 backdrop-blur-sm text-gray-800 px-8 py-4 rounded-lg text-lg font-semibold hover:bg-white hover:shadow-lg transition-all duration-300 transform hover:scale-105 border border-pink-200"
+                    className="btn-secondary"
                   >
                     Se connecter
                   </button>
@@ -115,58 +113,58 @@ export default function HomePage() {
               {/* Stats */}
               <div className="grid grid-cols-3 gap-8 pt-8">
                 <div className="text-center">
-                  <div className="text-3xl font-bold text-pink-600">
+                  <div className="text-3xl font-bold text-primary-600 dark:text-primary-400">
                     {animatedStats.users.toLocaleString()}+
                   </div>
-                  <div className="text-gray-600 text-sm">Utilisateurs actifs</div>
+                  <div className="text-neutral-600 dark:text-neutral-400 text-sm">Utilisateurs actifs</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-3xl font-bold text-purple-600">
+                  <div className="text-3xl font-bold text-secondary-600 dark:text-secondary-400">
                     {animatedStats.matches.toLocaleString()}+
                   </div>
-                  <div className="text-gray-600 text-sm">Matchs réalisés</div>
+                  <div className="text-neutral-600 dark:text-neutral-400 text-sm">Matchs réalisés</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-3xl font-bold text-rose-600">
+                  <div className="text-3xl font-bold gradient-text-warm">
                     {animatedStats.messages.toLocaleString()}+
                   </div>
-                  <div className="text-gray-600 text-sm">Messages échangés</div>
+                  <div className="text-neutral-600 dark:text-neutral-400 text-sm">Messages échangés</div>
                 </div>
               </div>
             </div>
 
             {/* Hero Image/Illustration */}
             <div className="relative">
-              <div className="bg-gradient-to-br from-pink-400 via-rose-400 to-purple-500 rounded-3xl p-8 transform rotate-3 hover:rotate-0 transition-transform duration-500">
-                <div className="bg-white rounded-2xl p-8 space-y-6 transform -rotate-3">
+              <div className="card-gradient p-8 transform rotate-3 hover:rotate-0 transition-bounce hover-lift">
+                <div className="card p-8 space-y-6 transform -rotate-3">
                   <div className="flex items-center space-x-4">
-                    <div className="w-16 h-16 bg-gradient-to-r from-pink-400 to-purple-500 rounded-full flex items-center justify-center">
+                    <div className="w-16 h-16 bg-gradient-to-r from-primary-400 to-secondary-500 rounded-full flex items-center justify-center shadow-lg">
                       <span className="text-white text-2xl">💖</span>
                     </div>
                     <div>
-                      <div className="h-4 bg-pink-200 rounded w-32 mb-2"></div>
-                      <div className="h-3 bg-gray-200 rounded w-24"></div>
+                      <div className="skeleton h-4 w-32 mb-2"></div>
+                      <div className="skeleton h-3 w-24"></div>
                     </div>
                   </div>
                   
                   <div className="space-y-3">
                     <div className="flex items-center space-x-2">
                       <div className="w-3 h-3 bg-green-400 rounded-full"></div>
-                      <div className="h-3 bg-gray-200 rounded w-40"></div>
+                      <div className="skeleton h-3 w-40"></div>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <div className="w-3 h-3 bg-pink-400 rounded-full"></div>
-                      <div className="h-3 bg-gray-200 rounded w-32"></div>
+                      <div className="w-3 h-3 bg-primary-400 rounded-full"></div>
+                      <div className="skeleton h-3 w-32"></div>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <div className="w-3 h-3 bg-purple-400 rounded-full"></div>
-                      <div className="h-3 bg-gray-200 rounded w-36"></div>
+                      <div className="w-3 h-3 bg-secondary-400 rounded-full"></div>
+                      <div className="skeleton h-3 w-36"></div>
                     </div>
                   </div>
                   
                   <div className="flex space-x-2">
-                    <div className="bg-pink-500 text-white px-4 py-2 rounded-full text-sm">💕 Match!</div>
-                    <div className="bg-purple-500 text-white px-4 py-2 rounded-full text-sm">✨ Super Like</div>
+                    <div className="badge badge-success">💕 Match!</div>
+                    <div className="badge">✨ Super Like</div>
                   </div>
                 </div>
               </div>
@@ -176,13 +174,13 @@ export default function HomePage() {
       </section>
 
       {/* Features Section */}
-      <section id="features" className="py-20 bg-white">
+      <section id="features" className="py-20 bg-white dark:bg-neutral-900">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-gray-800 mb-4">
+            <h2 className="text-4xl font-bold text-neutral-800 dark:text-neutral-200 mb-4">
               Pourquoi choisir Flow Dating ?
             </h2>
-            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+            <p className="text-xl text-neutral-600 dark:text-neutral-400 max-w-3xl mx-auto">
               Nous utilisons la technologie la plus avancée pour vous aider à trouver des connexions authentiques
             </p>
           </div>
@@ -193,52 +191,52 @@ export default function HomePage() {
                 icon: "👥",
                 title: "Algorithme intelligent",
                 description: "Notre IA analyse vos préférences pour vous proposer les profils les plus compatibles",
-                color: "pink"
+                gradient: "from-primary-400 to-primary-600"
               },
               {
                 icon: "🔒",
                 title: "Sécurité maximale",
                 description: "Vérification des profils et protection de vos données personnelles garanties",
-                color: "purple"
+                gradient: "from-secondary-400 to-secondary-600"
               },
               {
                 icon: "💬",
                 title: "Chat en temps réel",
                 description: "Communiquez instantanément avec vos matchs grâce à notre système de messagerie",
-                color: "rose"
+                gradient: "from-orange-400 to-red-500"
               },
               {
                 icon: "💖",
                 title: "Matchs de qualité",
                 description: "Focalisez-vous sur les personnes qui vous correspondent vraiment",
-                color: "pink"
+                gradient: "from-primary-400 to-primary-600"
               },
               {
                 icon: "⭐",
                 title: "Profils vérifiés",
                 description: "Tous les profils sont vérifiés pour garantir des rencontres authentiques",
-                color: "purple"
+                gradient: "from-secondary-400 to-secondary-600"
               },
               {
                 icon: "✨",
                 title: "Expérience premium",
                 description: "Interface intuitive et fonctionnalités avancées pour une expérience optimale",
-                color: "rose"
+                gradient: "from-orange-400 to-red-500"
               }
             ].map((feature, index) => (
               <div 
                 key={index}
-                className="group bg-gradient-to-br from-white to-gray-50 p-8 rounded-2xl border border-gray-100 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-2"
+                className="card p-8 hover-lift hover-glow group"
               >
-                <div className={`w-14 h-14 bg-gradient-to-r from-${feature.color}-400 to-${feature.color}-600 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300`}>
+                <div className={`w-14 h-14 bg-gradient-to-r ${feature.gradient} rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300 shadow-lg`}>
                   <span className="text-white text-2xl">{feature.icon}</span>
                 </div>
                 
-                <h3 className="text-xl font-semibold text-gray-800 mb-3">
+                <h3 className="text-xl font-semibold text-neutral-800 dark:text-neutral-200 mb-3">
                   {feature.title}
                 </h3>
                 
-                <p className="text-gray-600 leading-relaxed">
+                <p className="text-neutral-600 dark:text-neutral-400 leading-relaxed">
                   {feature.description}
                 </p>
               </div>
@@ -248,19 +246,19 @@ export default function HomePage() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-20 bg-gradient-to-r from-pink-500 via-rose-500 to-purple-600">
+      <section className="py-20 bg-gradient-to-r from-primary-500 via-primary-400 to-secondary-600">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-4xl font-bold text-white mb-6">
             Prêt à trouver l'amour ?
           </h2>
           
-          <p className="text-xl text-pink-100 mb-8 max-w-2xl mx-auto">
+          <p className="text-xl text-primary-100 mb-8 max-w-2xl mx-auto">
             Rejoignez Flow Dating dès aujourd'hui et commencez votre histoire d'amour
           </p>
 
           <button 
             onClick={handleGetStarted}
-            className="bg-white text-pink-600 px-8 py-4 rounded-lg text-lg font-semibold hover:bg-pink-50 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl"
+            className="bg-white text-primary-600 px-8 py-4 rounded-xl text-lg font-semibold hover:bg-primary-50 transition-smooth hover-lift shadow-lg hover:shadow-xl"
           >
             {session ? 'Accéder à mon tableau de bord' : 'Créer mon profil gratuitement'}
           </button>
@@ -268,51 +266,51 @@ export default function HomePage() {
       </section>
 
       {/* Footer */}
-      <footer className="bg-gray-900 text-white py-12">
+      <footer className="bg-neutral-900 dark:bg-neutral-950 text-white py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid md:grid-cols-4 gap-8">
             <div className="space-y-4">
               <div className="flex items-center space-x-2">
-                <span className="text-pink-500 text-xl">💖</span>
-                <span className="text-lg font-bold">💕 Flow Dating</span>
+                <span className="text-primary-500 text-xl">💖</span>
+                <span className="text-lg font-bold gradient-text">💕 Flow Dating</span>
               </div>
-              <p className="text-gray-400">
+              <p className="text-neutral-400">
                 La plateforme de rencontre nouvelle génération pour des connexions authentiques.
               </p>
             </div>
 
             <div>
               <h4 className="font-semibold mb-4">Liens utiles</h4>
-              <div className="space-y-2 text-gray-400">
-                <div className="hover:text-white cursor-pointer transition-colors">À propos</div>
-                <div className="hover:text-white cursor-pointer transition-colors">Comment ça marche</div>
-                <div className="hover:text-white cursor-pointer transition-colors">Témoignages</div>
-                <div className="hover:text-white cursor-pointer transition-colors">Blog</div>
+              <div className="space-y-2 text-neutral-400">
+                <div className="nav-link cursor-pointer">À propos</div>
+                <div className="nav-link cursor-pointer">Comment ça marche</div>
+                <div className="nav-link cursor-pointer">Témoignages</div>
+                <div className="nav-link cursor-pointer">Blog</div>
               </div>
             </div>
 
             <div>
               <h4 className="font-semibold mb-4">Support</h4>
-              <div className="space-y-2 text-gray-400">
-                <div className="hover:text-white cursor-pointer transition-colors">Centre d'aide</div>
-                <div className="hover:text-white cursor-pointer transition-colors">Conditions d'utilisation</div>
-                <div className="hover:text-white cursor-pointer transition-colors">Politique de confidentialité</div>
-                <div className="hover:text-white cursor-pointer transition-colors">Contact</div>
+              <div className="space-y-2 text-neutral-400">
+                <div className="nav-link cursor-pointer">Centre d'aide</div>
+                <div className="nav-link cursor-pointer">Conditions d'utilisation</div>
+                <div className="nav-link cursor-pointer">Politique de confidentialité</div>
+                <div className="nav-link cursor-pointer">Contact</div>
               </div>
             </div>
 
             <div>
               <h4 className="font-semibold mb-4">Suivez-nous</h4>
-              <div className="space-y-2 text-gray-400">
-                <div className="hover:text-white cursor-pointer transition-colors">📘 Facebook</div>
-                <div className="hover:text-white cursor-pointer transition-colors">📷 Instagram</div>
-                <div className="hover:text-white cursor-pointer transition-colors">🐦 Twitter</div>
-                <div className="hover:text-white cursor-pointer transition-colors">🎵 TikTok</div>
+              <div className="space-y-2 text-neutral-400">
+                <div className="nav-link cursor-pointer">📘 Facebook</div>
+                <div className="nav-link cursor-pointer">📷 Instagram</div>
+                <div className="nav-link cursor-pointer">🐦 Twitter</div>
+                <div className="nav-link cursor-pointer">🎵 TikTok</div>
               </div>
             </div>
           </div>
 
-          <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
+          <div className="border-t border-neutral-800 mt-8 pt-8 text-center text-neutral-400">
             <p>&copy; 2025 Flow Dating. Tous droits réservés.</p>
           </div>
         </div>

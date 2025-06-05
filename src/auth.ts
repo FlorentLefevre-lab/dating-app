@@ -1,28 +1,28 @@
-// lib/auth.ts
-import { NextAuthOptions } from "next-auth"
+// src/auth.ts
 import NextAuth from "next-auth"
 import GoogleProvider from "next-auth/providers/google"
 import FacebookProvider from "next-auth/providers/facebook"
 import CredentialsProvider from "next-auth/providers/credentials"
 import { PrismaAdapter } from "@auth/prisma-adapter"
-import { prisma } from "./db"
+import { prisma } from "./lib/db"
 import bcrypt from "bcryptjs"
 
-export const authOptions: NextAuthOptions = {
+export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
+  
   providers: [
     CredentialsProvider({
       id: "credentials",
       name: "credentials",
       credentials: {
-        email: { 
-          label: "Email", 
+        email: {
+          label: "Email",
           type: "email",
-          placeholder: "votre.email@example.com" 
+          placeholder: "votre.email@example.com"
         },
-        password: { 
-          label: "Mot de passe", 
-          type: "password" 
+        password: {
+          label: "Mot de passe",
+          type: "password"
         }
       },
       async authorize(credentials) {
@@ -107,7 +107,6 @@ export const authOptions: NextAuthOptions = {
         })
         token.emailVerified = dbUser?.emailVerified
       }
-      
       return token
     },
 
@@ -117,7 +116,6 @@ export const authOptions: NextAuthOptions = {
         session.user.provider = token.provider as string
         session.user.emailVerified = token.emailVerified as Date | null
       }
-      
       return session
     },
 
@@ -164,42 +162,36 @@ export const authOptions: NextAuthOptions = {
           return false
         }
       }
-
       return true
     },
 
-    // 🔥 MODIFIÉ: Redirection vers dashboard pour tous les types de connexion
     async redirect({ url, baseUrl }) {
       console.log("🔄 Redirection demandée:", { url, baseUrl })
       
-      // Si c'est une URL relative, l'ajouter au baseUrl
+      // Si c'est une URL relative
       if (url.startsWith("/")) {
         const fullUrl = `${baseUrl}${url}`
         console.log("🔄 URL relative détectée:", fullUrl)
         
-        // Si on redirige vers le profil, rediriger vers le dashboard à la place
+        // Rediriger /profile vers /dashboard
         if (url === '/profile') {
           console.log("🏠 Redirection /profile → /dashboard")
           return `${baseUrl}/dashboard`
         }
-        
         return fullUrl
       }
-      
+
       // Si c'est une URL du même domaine
       if (new URL(url).origin === baseUrl) {
         const urlObj = new URL(url)
-        
-        // Si on redirige vers le profil, rediriger vers le dashboard à la place
         if (urlObj.pathname === '/profile') {
           console.log("🏠 Redirection URL complète /profile → /dashboard")
           return `${baseUrl}/dashboard`
         }
-        
         return url
       }
-      
-      // Par défaut, rediriger vers le dashboard au lieu du profil
+
+      // Par défaut, rediriger vers dashboard
       console.log("🏠 Redirection par défaut vers /dashboard")
       return `${baseUrl}/dashboard`
     }
@@ -207,9 +199,8 @@ export const authOptions: NextAuthOptions = {
 
   pages: {
     signIn: '/auth/login',
-    signUp: '/auth/register', 
     error: '/auth/error',
-    verifyRequest: '/auth/verify-request',
+    verifyRequest: '/auth/verify-email',
   },
 
   events: {
@@ -217,11 +208,9 @@ export const authOptions: NextAuthOptions = {
       console.log(`✅ Utilisateur connecté: ${user.email} via ${account?.provider}`)
     },
     async signOut({ session, token }) {
-      console.log(`👋 Utilisateur déconnexé: ${session?.user?.email}`)
+      console.log(`👋 Utilisateur déconnecté`)
     },
   },
 
   debug: process.env.NODE_ENV === "development",
-}
-
-export default NextAuth(authOptions)
+})

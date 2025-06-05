@@ -1,139 +1,165 @@
-// types/profile.ts
+// types/profiles.ts - Types et interfaces pour le système de profil
+
 export interface Photo {
-    id: string;
-    url: string;
-    isPrimary: boolean;
-    createdAt: string;
-  }
+  id: string;
+  url: string;
+  isPrimary: boolean;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface UserPreferences {
+  id?: string;
+  userId?: string;
+  minAge: number;
+  maxAge: number;
+  maxDistance: number;
+  gender: string | null;
+  lookingFor?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  name: string | null;
+  age: number | null;
+  bio: string | null;
+  location: string | null;
+  department?: string | null;
+  region?: string | null;
+  postcode?: string | null;
   
-  export interface UserProfile {
-    id: string;
-    name: string | null;
-    email: string;
-    age: number | null;
-    bio: string | null;
-    location?: string;
-    department?: string;
-    region?: string;
-    postcode?: string;
-    interests: string[];
-    photos: Photo[];
-    gender: string | null;
-    profession: string | null;
-    maritalStatus: string | null;
-    zodiacSign: string | null;
-    dietType: string | null;
-    religion: string | null;
-    ethnicity: string | null;
-    preferences?: {
-    minAge: number;
-    maxAge: number;
-    maxDistance: number;
-    genderPreference: string | null;
-    };
-    createdAt: string;
-    updatedAt: string;
-  }
+  // Informations personnelles
+  gender: string | null;
+  profession: string | null;
+  maritalStatus: string | null;
+  zodiacSign: string | null;
+  dietType: string | null;
+  religion: string | null;
+  ethnicity: string | null;
   
-  export type TabType = 'dashboard' | 'overview' | 'edit' | 'personal' | 'photos' | 'preferences' | 'settings';
+  // Collections
+  interests: string[];
+  photos: Photo[];
+  preferences?: UserPreferences;
   
-  // constants/profile.ts
-  export const GENDERS = [
-    { value: 'HOMME', label: 'Homme' },
-    { value: 'FEMME', label: 'Femme' },
-    { value: 'NON_BINAIRE', label: 'Non binaire' },
-    { value: 'AUTRE', label: 'Autre' }
-  ];
-  
-  export const PROFESSIONS = [
-    { value: 'SANTE', label: 'Santé & Médical' },
-    { value: 'EDUCATION', label: 'Éducation & Formation' },
-    { value: 'TECH', label: 'Technologie & IT' },
-    { value: 'FINANCE', label: 'Finance & Banque' },
-    { value: 'DROIT', label: 'Droit & Justice' },
-    { value: 'ARTS', label: 'Arts & Créatif' },
-    { value: 'MEDIA', label: 'Médias & Communication' },
-    { value: 'COMMERCE', label: 'Commerce & Vente' },
-    { value: 'INGENIERIE', label: 'Ingénierie' },
-    { value: 'RESTAURATION', label: 'Restauration & Hôtellerie' },
-    { value: 'TRANSPORT', label: 'Transport & Logistique' },
-    { value: 'AGRICULTURE', label: 'Agriculture & Environnement' },
-    { value: 'SPORT', label: 'Sport & Fitness' },
-    { value: 'SERVICES', label: 'Services' },
-    { value: 'ETUDIANT', label: 'Étudiant(e)' },
-    { value: 'RETRAITE', label: 'Retraité(e)' },
-    { value: 'RECHERCHE_EMPLOI', label: 'En recherche d\'emploi' },
-    { value: 'ENTREPRENEUR', label: 'Entrepreneur' },
-    { value: 'AUTRE', label: 'Autre' }
-  ];
-  
-  export const MARITAL_STATUS = [
-    { value: 'CELIBATAIRE', label: 'Célibataire' },
-    { value: 'DIVORCE', label: 'Divorcé(e)' },
-    { value: 'VEUF', label: 'Veuf/Veuve' },
-    { value: 'SEPARE', label: 'Séparé(e)' },
-    { value: 'COMPLIQUE', label: 'C\'est compliqué' }
-  ];
-  
-  export const ZODIAC_SIGNS = [
-    { value: 'BELIER', label: 'Bélier ♈' },
-    { value: 'TAUREAU', label: 'Taureau ♉' },
-    { value: 'GEMEAUX', label: 'Gémeaux ♊' },
-    { value: 'CANCER', label: 'Cancer ♋' },
-    { value: 'LION', label: 'Lion ♌' },
-    { value: 'VIERGE', label: 'Vierge ♍' },
-    { value: 'BALANCE', label: 'Balance ♎' },
-    { value: 'SCORPION', label: 'Scorpion ♏' },
-    { value: 'SAGITTAIRE', label: 'Sagittaire ♐' },
-    { value: 'CAPRICORNE', label: 'Capricorne ♑' },
-    { value: 'VERSEAU', label: 'Verseau ♒' },
-    { value: 'POISSONS', label: 'Poissons ♓' }
-  ];
-  
-  export const DIET_TYPES = [
-    { value: 'OMNIVORE', label: 'Omnivore' },
-    { value: 'VEGETARIEN', label: 'Végétarien' },
-    { value: 'VEGETALIEN', label: 'Végétalien/Vegan' },
-    { value: 'PESCETARIEN', label: 'Pescétarien' },
-    { value: 'FLEXITARIEN', label: 'Flexitarien' },
-    { value: 'CRUDIVORE', label: 'Crudivore' },
-    { value: 'SANS_GLUTEN', label: 'Sans gluten' },
-    { value: 'KETO', label: 'Keto/Cétogène' },
-    { value: 'AUTRE', label: 'Autre régime' }
-  ];
-  
-  export const RELIGIONS = [
-    { value: 'ATHEE', label: 'Athée' },
-    { value: 'AGNOSTIQUE', label: 'Agnostique' },
-    { value: 'CHRETIEN', label: 'Chrétien' },
-    { value: 'CATHOLIQUE', label: 'Catholique' },
-    { value: 'PROTESTANT', label: 'Protestant' },
-    { value: 'ORTHODOXE', label: 'Orthodoxe' },
-    { value: 'MUSULMAN', label: 'Musulman' },
-    { value: 'JUIF', label: 'Juif' },
-    { value: 'BOUDDHISTE', label: 'Bouddhiste' },
-    { value: 'HINDOU', label: 'Hindou' },
-    { value: 'SIKH', label: 'Sikh' },
-    { value: 'SPIRITUEL', label: 'Spirituel (non religieux)' },
-    { value: 'AUTRE', label: 'Autre religion' }
-  ];
-  
-  export const ETHNICITIES = [
-    { value: 'CAUCASIEN', label: 'Caucasien/Blanc' },
-    { value: 'AFRODESCENDANT', label: 'Afrodescendant/Noir' },
-    { value: 'ASIATIQUE', label: 'Asiatique' },
-    { value: 'HISPANIQUE', label: 'Hispanique/Latino' },
-    { value: 'ARABE', label: 'Arabe/Moyen-Orient' },
-    { value: 'AMERINDIEN', label: 'Amérindien' },
-    { value: 'PACIFIQUE', label: 'Îles du Pacifique' },
-    { value: 'METISSE', label: 'Métissé/Mixte' },
-    { value: 'AUTRE', label: 'Autre' },
-    { value: 'PREFERE_PAS_DIRE', label: 'Préfère ne pas dire' }
-  ];
-  
-  // Fonction helper pour obtenir le label
-  export const getLabel = (value: string | null, options: { value: string; label: string }[]) => {
-    if (!value) return 'Non défini';
-    const option = options.find(opt => opt.value === value);
-    return option ? option.label : value;
+  // Métadonnées
+  createdAt: string;
+  updatedAt: string;
+  lastLoginAt?: string;
+  isVerified?: boolean;
+  isActive?: boolean;
+}
+
+// Types pour les données de formulaire
+export interface BasicInfoFormData {
+  name: string;
+  age: number | null;
+  bio: string;
+  location: string;
+  department?: string;
+  region?: string;
+  postcode?: string;
+  profession: string;
+}
+
+export interface PersonalInfoFormData {
+  gender: string;
+  profession: string;
+  maritalStatus: string;
+  zodiacSign: string;
+  dietType: string;
+  religion: string;
+  ethnicity: string;
+  interests: string[];
+}
+
+export interface PreferencesFormData {
+  minAge: number;
+  maxAge: number;
+  maxDistance: number;
+  gender: string;
+  lookingFor: string;
+}
+
+// Types pour les composants
+export interface ProfileFormProps {
+  profile: UserProfile | null;
+  loading: boolean;
+  onSubmit: (data: any) => Promise<void>;
+  onCancel: () => void;
+}
+
+export interface PhotosManagerProps {
+  photos: Photo[];
+  onMessage: (message: string, type: MessageType) => void;
+  onPhotosChange?: () => void;
+}
+
+export interface SettingsPanelProps {
+  profile: UserProfile | null;
+  photos: Photo[];
+  session: any;
+  onMessage: (message: string, type?: MessageType) => void;
+}
+
+// Types pour les messages et notifications
+export type MessageType = 'success' | 'error' | 'warning' | 'info';
+
+export interface NotificationMessage {
+  id: string;
+  type: MessageType;
+  title: string;
+  message: string;
+  duration?: number;
+  action?: {
+    label: string;
+    onClick: () => void;
   };
+}
+
+// Types pour les onglets
+export type TabType = 'overview' | 'edit' | 'personal' | 'photos' | 'preferences' | 'settings';
+
+export interface TabConfig {
+  id: TabType;
+  label: string;
+  icon: any;
+  color: string;
+  description: string;
+  badge?: string | number;
+}
+
+// Types pour l'API
+export interface ApiResponse<T = any> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  message?: string;
+  meta?: {
+    total?: number;
+    page?: number;
+    limit?: number;
+    hasMore?: boolean;
+  };
+}
+
+export interface PhotoUploadResponse {
+  id: string;
+  url: string;
+  isPrimary: boolean;
+  createdAt: string;
+}
+
+export interface ValidationError {
+  field: string;
+  message: string;
+  code?: string;
+}
+
+export interface FormValidationResult {
+  isValid: boolean;
+  errors: ValidationError[];
+}

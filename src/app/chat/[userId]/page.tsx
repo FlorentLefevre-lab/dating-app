@@ -24,12 +24,18 @@ export default function ChatPage() {
       return;
     }
 
-    if (userId && typeof userId === 'string') {
+    if (session.user.id === userId) {
+      setError('Vous ne pouvez pas chatter avec vous-même');
+      setLoading(false);
+      return;
+    }
+
+    if (userId) {
       loadUser(userId);
     }
-  }, [userId, session, status]);
+  }, [userId, session, status, router]);
 
-  const loadUser = async (id: string): Promise<void> => {
+  const loadUser = async (id: string) => {
     try {
       setLoading(true);
       const response = await fetch(`/api/users/${id}`);
@@ -49,113 +55,55 @@ export default function ChatPage() {
 
   if (status === 'loading' || loading) {
     return (
-      <div className="loading-container">
-        <div className="spinner"></div>
-        <p>Chargement...</p>
-        
-        <style jsx>{`
-          .loading-container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            gap: 1rem;
-          }
-          
-          .spinner {
-            width: 40px;
-            height: 40px;
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #007bff;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-          }
-          
-          @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-          }
-        `}</style>
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+          <p className="text-gray-600">Chargement...</p>
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="error-container">
-        <h2>Erreur</h2>
-        <p>{error}</p>
-        <button onClick={() => router.back()}>
-          Retour
-        </button>
-        
-        <style jsx>{`
-          .error-container {
-            text-align: center;
-            padding: 2rem;
-            color: #dc3545;
-          }
-          
-          button {
-            margin-top: 1rem;
-            padding: 0.5rem 1rem;
-            background: #007bff;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-          }
-        `}</style>
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 flex items-center justify-center">
+        <div className="bg-white p-8 rounded-lg shadow-lg text-center max-w-md">
+          <div className="text-red-500 text-6xl mb-4">⚠️</div>
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">Erreur</h2>
+          <p className="text-gray-600 mb-6">{error}</p>
+          <button
+            onClick={() => router.back()}
+            className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+          >
+            Retour
+          </button>
+        </div>
       </div>
     );
   }
 
   if (!otherUser) {
     return (
-      <div className="not-found">
-        <h2>Utilisateur non trouvé</h2>
-        <button onClick={() => router.back()}>
-          Retour
-        </button>
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 flex items-center justify-center">
+        <div className="bg-white p-8 rounded-lg shadow-lg text-center max-w-md">
+          <div className="text-gray-400 text-6xl mb-4">👤</div>
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">Utilisateur non trouvé</h2>
+          <button
+            onClick={() => router.back()}
+            className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+          >
+            Retour
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="chat-page">
-      <div className="container">
-        <Chat 
-          otherUserId={otherUser.id}
-          otherUserName={otherUser.name || 'Utilisateur inconnu'}
-          otherUserImage={otherUser.image || '/default-avatar.png'}
-        />
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 p-4">
+      <div className="max-w-4xl mx-auto h-[calc(100vh-2rem)]">
+        <Chat otherUser={otherUser} className="h-full" />
       </div>
-      
-      <style jsx>{`
-        .chat-page {
-          min-height: 100vh;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          padding: 2rem;
-        }
-        
-        .container {
-          max-width: 800px;
-          margin: 0 auto;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          min-height: calc(100vh - 4rem);
-        }
-        
-        .not-found {
-          text-align: center;
-          padding: 2rem;
-          color: #666;
-          background: white;
-          border-radius: 8px;
-        }
-      `}</style>
     </div>
   );
 }

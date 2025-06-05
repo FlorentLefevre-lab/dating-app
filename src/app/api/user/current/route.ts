@@ -1,103 +1,40 @@
-// src/app/api/user/current/route.ts - API pour récupérer l'utilisateur actuel
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/lib/auth';
-import { NextRequest, NextResponse } from 'next/server';
+// src/app/api/user/current/route.ts
+import { NextRequest, NextResponse } from 'next/server'
+import { auth } from '../../../../auth'  // ✅ Nouveau import v5
+import { prisma } from '../../../../lib/db'
 
-interface CurrentUserResponse {
-  success: boolean;
-  user?: {
-    id: string;
-    name: string;
-    email: string;
-    image?: string;
-    age?: number;
-    bio?: string;
-    location?: string;
-    profession?: string;
-    interests: string[];
-  };
-  error?: string;
-}
-
-export async function GET(request: NextRequest): Promise<NextResponse<CurrentUserResponse>> {
-  console.log('👤 API Current User - Récupération utilisateur actuel');
+export async function GET(request: NextRequest) {
+  const session = await auth()  // ✅ Nouvelle syntaxe v5
   
-  try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session?.user?.email) {
-      return NextResponse.json({ 
-        success: false,
-        error: 'Non authentifié'
-      }, { status: 401 });
-    }
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: 'Non autorisé' }, { status: 401 })
+  }
 
-    const { prisma } = await import('@/lib/db');
-    
-    // Récupérer l'utilisateur complet depuis la base de données
+  try {
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
+      where: { id: session.user.id },
       select: {
         id: true,
-        name: true,
         email: true,
+        name: true,
+        image: true,
         age: true,
         bio: true,
         location: true,
         profession: true,
+        gender: true,
         interests: true,
-        photos: {
-          select: {
-            url: true,
-            isPrimary: true
-          },
-          orderBy: [
-            { isPrimary: 'desc' },
-            { createdAt: 'asc' }
-          ]
-        }
+        createdAt: true
       }
-    });
+    })
 
     if (!user) {
-      return NextResponse.json({ 
-        success: false,
-        error: 'Utilisateur introuvable en base de données'
-      }, { status: 404 });
+      return NextResponse.json({ error: 'Utilisateur non trouvé' }, { status: 404 })
     }
 
-    // Utiliser la photo primaire ou la première photo disponible
-    const primaryPhoto = user.photos.find(photo => photo.isPrimary);
-    const imageUrl = primaryPhoto?.url || user.photos[0]?.url || session.user.image;
-
-    const currentUser = {
-      id: user.id, // ✅ Vrai ID
-      name: user.name || session.user.name || 'Utilisateur',
-      email: user.email,
-      image: imageUrl || undefined,
-      age: user.age || undefined,
-      bio: user.bio || undefined,
-      location: user.location || undefined,
-      profession: user.profession || undefined,
-      interests: user.interests || []
-    };
-
-    console.log('✅ Utilisateur actuel récupéré:', {
-      id: currentUser.id,
-      email: currentUser.email,
-      name: currentUser.name
-    });
-
-    return NextResponse.json({
-      success: true,
-      user: currentUser
-    });
-
-  } catch (error: any) {
-    console.error('❌ Erreur API current user:', error);
-    return NextResponse.json({
-      success: false,
-      error: 'Erreur serveur'
-    }, { status: 500 });
+    return NextResponse.json(user)
+  } catch (error) {
+    console.error('Erreur récupération utilisateur:', error)
+    return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })
   }
 }

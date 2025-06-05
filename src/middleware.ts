@@ -1,53 +1,44 @@
-// ===========================================
-// ÉTAPE 14: Middleware Next.js
-// FICHIER: src/middleware.ts
-// ===========================================
+// src/middleware.ts
+import { auth } from "./auth"
 
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
-import { getToken } from 'next-auth/jwt';
+export default auth((req) => {
+  const { pathname } = req.nextUrl
+  const isLoggedIn = !!req.auth
 
-export async function middleware(request: NextRequest) {
-  // Permettre les connexions Socket.io et les fichiers statiques
-  if (request.nextUrl.pathname.startsWith('/socket.io/') || 
-      request.nextUrl.pathname.startsWith('/_next/') ||
-      request.nextUrl.pathname.startsWith('/api/auth/') ||
-      request.nextUrl.pathname.startsWith('/favicon.ico') ||
-      request.nextUrl.pathname.startsWith('/public/')) {
-    return NextResponse.next();
+  console.log(`🔍 Middleware: ${pathname}, Auth: ${isLoggedIn}`)
+
+  // Routes qui nécessitent une authentification
+  const protectedRoutes = ['/dashboard', '/profile', '/matches', '/discover', '/chat']
+  const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route))
+
+  // Routes publiques
+  const publicRoutes = ['/auth/', '/', '/api/auth']
+  const isPublicRoute = publicRoutes.some(route => pathname.startsWith(route))
+
+  // Redirection si pas connecté sur route protégée
+  if (isProtectedRoute && !isLoggedIn) {
+    const loginUrl = new URL('/auth/login', req.nextUrl.origin)
+    loginUrl.searchParams.set('callbackUrl', pathname)
+    console.log(`🔄 Redirection vers login: ${loginUrl}`)
+    return Response.redirect(loginUrl)
   }
 
-  // Protection des routes de chat
-  if (request.nextUrl.pathname.startsWith('/chat')) {
-    const token = await getToken({ req: request });
-    
-    if (!token) {
-      const loginUrl = new URL('/auth/login', request.url);
-      loginUrl.searchParams.set('callbackUrl', request.url);
-      return NextResponse.redirect(loginUrl);
-    }
+  // Redirection si connecté sur page auth (sauf error)
+  if (isLoggedIn && pathname.startsWith('/auth/') && pathname !== '/auth/error') {
+    console.log(`🏠 Redirection vers dashboard`)
+    return Response.redirect(new URL('/dashboard', req.nextUrl.origin))
   }
 
-  // Protection des routes protégées (découverte, matches, profil)
-  if (request.nextUrl.pathname.startsWith('/discover') ||
-      request.nextUrl.pathname.startsWith('/matches') ||
-      request.nextUrl.pathname.startsWith('/profile')) {
-    const token = await getToken({ req: request });
-    
-    if (!token) {
-      const loginUrl = new URL('/auth/login', request.url);
-      loginUrl.searchParams.set('callbackUrl', request.url);
-      return NextResponse.redirect(loginUrl);
-    }
+  // Route racine
+  if (pathname === '/') {
+    const targetUrl = isLoggedIn ? '/dashboard' : '/auth/login'
+    console.log(`🏠 Redirection racine vers: ${targetUrl}`)
+    return Response.redirect(new URL(targetUrl, req.nextUrl.origin))
   }
 
-  return NextResponse.next();
-}
+  return
+})
 
 export const config = {
-  matcher: [
-    '/discover/:path*',
-    '/matches/:path*',
-    '/profile/:path*'
-  ],
-};
+  matcher: ['/((?!api/auth|_next/static|_next/image|favicon.ico|.*\\.).*)'],
+}

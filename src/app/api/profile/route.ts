@@ -1,7 +1,6 @@
 // src/app/api/profile/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth'; // Ajustez selon votre config
+import { auth } from '../../../auth'
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
@@ -11,7 +10,7 @@ export async function GET(request: NextRequest) {
   try {
     console.log('🔍 API GET /profile - Début');
     
-    const session = await getServerSession(authOptions);
+    const session = await auth()
     
     if (!session?.user?.email) {
       console.log('❌ Pas de session utilisateur');

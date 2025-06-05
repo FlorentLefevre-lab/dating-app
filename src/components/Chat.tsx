@@ -1,258 +1,245 @@
-import { useState, useEffect, useRef } from 'react';
-import { useSession } from 'next-auth/react';
-import { MessageService } from '../lib/messageService';
+// src/components/Chat.tsx
+'use client';
 
-export default function Chat({ otherUserId, otherUserName, otherUserImage }) {
+import React, { useState, useRef, useEffect } from 'react';
+import { useSession } from 'next-auth/react';
+import { useChat } from '../hooks/useChat';
+import type { ChatUser } from '../types/chat';
+
+interface ChatProps {
+  otherUser: ChatUser;
+  className?: string;
+}
+
+const Chat: React.FC<ChatProps> = ({ otherUser, className = '' }) => {
   const { data: session } = useSession();
-  const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
-  const [loading, setLoading] = useState(false);
-  const messagesEndRef = useRef(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const {
+    messages,
+    loading,
+    error,
+    sendMessage,
+    markAsRead,
+    clearError,
+    hasUnreadMessages,
+    isTyping,
+    setTyping,
+    otherUserTyping,
+    otherUserPresence
+  } = useChat(
+    otherUser.id,
+    otherUser.name || 'Utilisateur',
+    otherUser.image || '/default-avatar.png'
+  );
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   useEffect(() => {
-    if (!session?.user?.id || !otherUserId) return;
+    scrollToBottom();
+  }, [messages]);
 
-    // Charger l'historique depuis Prisma
-    loadMessageHistory();
-
-    // Écouter les nouveaux messages via Firebase
-    const unsubscribe = MessageService.subscribeToMessages(
-      session.user.id,
-      otherUserId,
-      (firebaseMessages) => {
-        // Fusionner avec les messages existants
-        setMessages(prev => {
-          const combined = [...prev];
-          firebaseMessages.forEach(fbMsg => {
-            if (!combined.find(m => m.clientId === fbMsg.clientId)) {
-              combined.push({
-                id: fbMsg.id,
-                content: fbMsg.content,
-                senderId: fbMsg.senderId,
-                receiverId: fbMsg.receiverId,
-                createdAt: fbMsg.timestamp,
-                clientId: fbMsg.clientId,
-                status: fbMsg.status,
-                sender: { 
-                  id: fbMsg.senderId,
-                  name: fbMsg.senderId === session.user.id ? session.user.name : otherUserName,
-                  image: fbMsg.senderId === session.user.id ? session.user.image : otherUserImage
-                }
-              });
-            }
-          });
-          return combined.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-        });
-      }
-    );
-
-    return unsubscribe;
-  }, [session?.user?.id, otherUserId]);
-
-  useEffect(scrollToBottom, [messages]);
-
-  const loadMessageHistory = async () => {
-    try {
-      const response = await fetch(`/api/messages?conversationWith=${otherUserId}`);
-      if (response.ok) {
-        const history = await response.json();
-        setMessages(history);
-      }
-    } catch (error) {
-      console.error('Erreur chargement historique:', error);
+  // Gestion du typing
+  useEffect(() => {
+    let timeout: NodeJS.Timeout;
+    
+    if (newMessage.trim()) {
+      setTyping(true);
+      timeout = setTimeout(() => setTyping(false), 1000);
+    } else {
+      setTyping(false);
     }
-  };
 
-  const sendMessage = async (e) => {
-    e.preventDefault();
-    if (!newMessage.trim() || !session?.user?.id) return;
-
-    const clientId = `${Date.now()}-${Math.random()}`;
-    const tempMessage = {
-      id: clientId,
-      content: newMessage,
-      senderId: session.user.id,
-      receiverId: otherUserId,
-      createdAt: new Date(),
-      clientId,
-      status: 'SENDING',
-      sender: session.user
+    return () => {
+      if (timeout) clearTimeout(timeout);
     };
+  }, [newMessage, setTyping]);
 
-    setMessages(prev => [...prev, tempMessage]);
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMessage.trim()) return;
+
+    await sendMessage(newMessage);
     setNewMessage('');
-    setLoading(true);
-
-    try {
-      await MessageService.sendMessage(
-        session.user.id,
-        otherUserId,
-        newMessage,
-        clientId
-      );
-    } catch (error) {
-      console.error('Erreur envoi:', error);
-      // Marquer le message comme échoué
-      setMessages(prev => 
-        prev.map(m => 
-          m.clientId === clientId 
-            ? { ...m, status: 'FAILED' }
-            : m
-        )
-      );
-    }
-    setLoading(false);
   };
 
-  if (!session) return <div>Connectez-vous pour chatter</div>;
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'SENDING': return '⏳';
+      case 'SENT': return '✓';
+      case 'DELIVERED': return '✓✓';
+      case 'READ': return '✓✓';
+      case 'FAILED': return '❌';
+      default: return '';
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'READ': return '#4CAF50';
+      case 'DELIVERED': return '#2196F3';
+      case 'SENT': return '#9E9E9E';
+      case 'FAILED': return '#F44336';
+      default: return '#9E9E9E';
+    }
+  };
+
+  const formatTime = (date: Date) => {
+    return new Intl.DateTimeFormat('fr-FR', {
+      hour: '2-digit',
+      minute: '2-digit'
+    }).format(date);
+  };
+
+  const getPresenceText = () => {
+    if (!otherUserPresence) return 'Statut inconnu';
+    
+    if (otherUserPresence.isOnline) {
+      return '🟢 En ligne';
+    } else {
+      const diff = Date.now() - otherUserPresence.lastSeen.getTime();
+      const minutes = Math.floor(diff / (1000 * 60));
+      
+      if (minutes < 1) return 'Vu à l\'instant';
+      if (minutes < 60) return `Vu il y a ${minutes}min`;
+      
+      const hours = Math.floor(minutes / 60);
+      if (hours < 24) return `Vu il y a ${hours}h`;
+      
+      const days = Math.floor(hours / 24);
+      return `Vu il y a ${days}j`;
+    }
+  };
+
+  if (!session) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <p className="text-gray-500">Connectez-vous pour chatter</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="chat-container">
-      <div className="chat-header">
-        <img src={otherUserImage} alt={otherUserName} className="avatar" />
-        <h3>{otherUserName}</h3>
+    <div className={`flex flex-col h-full bg-white rounded-lg shadow-lg overflow-hidden ${className}`}>
+      {/* Header */}
+      <div className="flex items-center p-4 bg-gradient-to-r from-blue-500 to-purple-600 text-white">
+        <img
+          src={otherUser.image || '/default-avatar.png'}
+          alt={otherUser.name || 'Utilisateur'}
+          className="w-12 h-12 rounded-full object-cover border-2 border-white/30"
+        />
+        <div className="ml-3 flex-1">
+          <h3 className="font-semibold text-lg">
+            {otherUser.name || 'Utilisateur'}
+          </h3>
+          <p className="text-sm opacity-90">
+            {getPresenceText()}
+          </p>
+        </div>
+        {hasUnreadMessages && (
+          <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+        )}
       </div>
 
-      <div className="messages">
-        {messages.map((message) => (
-          <div 
-            key={message.id} 
-            className={`message ${message.senderId === session.user.id ? 'own' : 'other'}`}
-          >
-            <div className="message-content">
-              {message.content}
-              {message.status === 'SENDING' && <span className="status">📤</span>}
-              {message.status === 'FAILED' && <span className="status">❌</span>}
+      {/* Erreur */}
+      {error && (
+        <div className="p-3 bg-red-50 border-l-4 border-red-500 text-red-700 flex justify-between">
+          <span>{error}</span>
+          <button onClick={clearError} className="font-bold">×</button>
+        </div>
+      )}
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
+        {messages.length === 0 ? (
+          <div className="text-center py-8">
+            <p className="text-gray-500 mb-2">Aucun message pour le moment</p>
+            <p className="text-gray-400">Commencez la conversation ! 👋</p>
+          </div>
+        ) : (
+          messages.map((message) => (
+            <div
+              key={message.id}
+              className={`flex ${message.senderId === session.user.id ? 'justify-end' : 'justify-start'}`}
+            >
+              <div
+                className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg relative ${
+                  message.senderId === session.user.id
+                    ? 'bg-blue-500 text-white rounded-br-sm'
+                    : 'bg-white border border-gray-200 text-gray-800 rounded-bl-sm'
+                }`}
+              >
+                <p className="break-words">
+                  {message.content}
+                  {message.edited && (
+                    <span className="text-xs opacity-70 ml-2">(modifié)</span>
+                  )}
+                </p>
+                
+                <div className="flex items-center justify-between mt-1">
+                  <span className="text-xs opacity-70">
+                    {formatTime(message.createdAt)}
+                  </span>
+                  
+                  {message.senderId === session.user.id && (
+                    <span
+                      className="text-xs ml-2"
+                      style={{ color: getStatusColor(message.status) }}
+                      title={message.status}
+                    >
+                      {getStatusIcon(message.status)}
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
-            <div className="message-time">
-              {new Date(message.createdAt).toLocaleTimeString()}
+          ))
+        )}
+
+        {/* Indicateur de frappe */}
+        {otherUserTyping && (
+          <div className="flex justify-start">
+            <div className="bg-gray-200 rounded-lg px-4 py-2 text-gray-600 text-sm">
+              <span className="animate-pulse">
+                {otherUser.name || 'L\'utilisateur'} est en train d'écrire...
+              </span>
             </div>
           </div>
-        ))}
+        )}
+
         <div ref={messagesEndRef} />
       </div>
 
-      <form onSubmit={sendMessage} className="message-form">
-        <input
-          type="text"
-          value={newMessage}
-          onChange={(e) => setNewMessage(e.target.value)}
-          placeholder="Écrivez votre message..."
-          disabled={loading}
-        />
-        <button type="submit" disabled={loading || !newMessage.trim()}>
-          Envoyer
-        </button>
+      {/* Formulaire d'envoi */}
+      <form onSubmit={handleSendMessage} className="p-4 border-t bg-white">
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={newMessage}
+            onChange={(e) => setNewMessage(e.target.value)}
+            placeholder="Écrivez votre message..."
+            className="flex-1 p-3 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            maxLength={1000}
+            disabled={loading}
+          />
+          <button
+            type="submit"
+            disabled={!newMessage.trim() || loading}
+            className="px-6 py-3 bg-blue-500 text-white rounded-full hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {loading ? '⏳' : '📤'}
+          </button>
+        </div>
+        
+        {isTyping && (
+          <p className="text-xs text-gray-500 mt-1">Vous êtes en train d'écrire...</p>
+        )}
       </form>
-
-      <style jsx>{`
-        .chat-container {
-          max-width: 600px;
-          height: 600px;
-          border: 1px solid #ddd;
-          border-radius: 12px;
-          display: flex;
-          flex-direction: column;
-          background: white;
-        }
-
-        .chat-header {
-          display: flex;
-          align-items: center;
-          padding: 1rem;
-          border-bottom: 1px solid #eee;
-          background: #f8f9fa;
-        }
-
-        .avatar {
-          width: 40px;
-          height: 40px;
-          border-radius: 50%;
-          margin-right: 0.5rem;
-        }
-
-        .messages {
-          flex: 1;
-          overflow-y: auto;
-          padding: 1rem;
-          background: #f5f5f5;
-        }
-
-        .message {
-          margin-bottom: 1rem;
-          max-width: 70%;
-        }
-
-        .message.own {
-          margin-left: auto;
-        }
-
-        .message-content {
-          padding: 0.75rem;
-          border-radius: 18px;
-          word-wrap: break-word;
-        }
-
-        .message.own .message-content {
-          background: #007bff;
-          color: white;
-        }
-
-        .message.other .message-content {
-          background: white;
-          border: 1px solid #ddd;
-        }
-
-        .message-time {
-          font-size: 0.7rem;
-          color: #666;
-          margin-top: 0.25rem;
-          text-align: right;
-        }
-
-        .message.other .message-time {
-          text-align: left;
-        }
-
-        .status {
-          margin-left: 0.5rem;
-          font-size: 0.8rem;
-        }
-
-        .message-form {
-          display: flex;
-          padding: 1rem;
-          border-top: 1px solid #eee;
-          background: white;
-        }
-
-        .message-form input {
-          flex: 1;
-          padding: 0.75rem;
-          border: 1px solid #ddd;
-          border-radius: 25px;
-          margin-right: 0.5rem;
-          outline: none;
-        }
-
-        .message-form button {
-          padding: 0.75rem 1.5rem;
-          background: #007bff;
-          color: white;
-          border: none;
-          border-radius: 25px;
-          cursor: pointer;
-        }
-
-        .message-form button:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-      `}</style>
     </div>
   );
-}
+};
+
+export default Chat;

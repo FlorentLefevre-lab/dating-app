@@ -1,10 +1,9 @@
 //src/app/layout.tsx
 
+import './globals.css'
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
-import './globals.css'
 import { Providers } from './providers'
-import RegisterServiceWorker from '@/components/RegisterServiceWorker';
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -21,7 +20,6 @@ export default function RootLayout({
   return (
     <html lang="fr">
       <body className={inter.className}>
-      <RegisterServiceWorker />
         <Providers>
           {children}
         </Providers>

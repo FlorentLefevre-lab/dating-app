@@ -1,217 +1,203 @@
-// components/profile/BasicInfoForm.tsx
-import React, { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
+'use client';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { z } from 'zod';
-import { UserProfile } from '../../types/profiles';
-import { PROFESSIONS } from '../../types/profiles';
-import LocationAutocomplete from '../common/LocationAutoComplete';
+import { UserProfile, ProfileFormProps } from '../../types/profiles';
+import { PROFESSIONS } from '../../constants/profileData';
 
-const basicInfoSchema = z.object({
-  name: z.string().min(1, 'Le nom est requis').max(100, 'Nom trop long'),
-  age: z.coerce.number().min(18, 'Âge minimum 18 ans').max(100, 'Âge maximum 100 ans').optional().nullable(),
-  bio: z.string().max(500, 'Bio limitée à 500 caractères').optional().nullable(),
-  location: z.string().max(100, 'Localisation trop longue').optional().nullable(),
-  department: z.string().optional().nullable(),
-  region: z.string().optional().nullable(),
-  postcode: z.string().optional().nullable(),
-  profession: z.string().optional().nullable()
-});
-
-type BasicInfoFormData = z.infer<typeof basicInfoSchema>;
-
-interface Props {
-  profile: UserProfile | null;
-  loading: boolean;
-  onSubmit: (data: BasicInfoFormData) => Promise<void>;
-  onCancel: () => void;
-}
-
-const BasicInfoForm: React.FC<Props> = ({ profile, loading, onSubmit, onCancel }) => {
-  const {
-    register,
-    handleSubmit,
-    setValue,
-    watch,
-    formState: { errors }
-  } = useForm<BasicInfoFormData>({
-    resolver: zodResolver(basicInfoSchema),
-    defaultValues: {
-      name: '',
-      age: null,
-      bio: '',
-      location: '',
-      department: '',
-      region: '',
-      postcode: '',
-      profession: ''
-    }
+const BasicInfoForm: React.FC<ProfileFormProps> = ({ 
+  profile, 
+  loading, 
+  onSubmit, 
+  onCancel 
+}) => {
+  const [formData, setFormData] = useState({
+    name: profile?.name || '',
+    age: profile?.age || '',
+    bio: profile?.bio || '',
+    location: profile?.location || '',
+    department: profile?.department || '',
+    region: profile?.region || '',
+    postcode: profile?.postcode || '',
+    profession: profile?.profession || ''
   });
 
-  const currentLocation = watch('location');
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
-  useEffect(() => {
-    if (profile) {
-      console.log('📊 Chargement du profil existant:', profile);
-      setValue('name', profile.name || '');
-      setValue('age', profile.age);
-      setValue('bio', profile.bio);
-      setValue('location', profile.location);
-      setValue('department', profile.department || '');
-      setValue('region', profile.region || '');
-      setValue('postcode', profile.postcode || '');
-      setValue('profession', profile.profession || '');
-      console.log('✅ Valeurs chargées dans le formulaire');
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {};
+    
+    if (!formData.name.trim()) {
+      newErrors.name = 'Le nom est requis';
+    } else if (formData.name.length > 100) {
+      newErrors.name = 'Nom trop long (max 100 caractères)';
     }
-  }, [profile, setValue]);
-
-  const handleLocationChange = (locationData: any) => {
-    console.log('🗺️ Nouvelle localisation sélectionnée:', locationData);
-    console.log('📍 Avant setValue - Valeurs actuelles du formulaire:', {
-      location: watch('location'),
-      department: watch('department'),
-      region: watch('region'),
-      postcode: watch('postcode')
-    });
     
-    setValue('location', locationData.fullAddress);
-    setValue('department', locationData.department);
-    setValue('region', locationData.region);
-    setValue('postcode', locationData.postcode);
+    if (formData.age && (formData.age < 18 || formData.age > 100)) {
+      newErrors.age = 'Âge doit être entre 18 et 100 ans';
+    }
     
-    console.log('📝 Après setValue - Nouvelles valeurs:', {
-      location: locationData.fullAddress,
-      department: locationData.department,
-      region: locationData.region,
-      postcode: locationData.postcode
-    });
+    if (formData.bio && formData.bio.length > 500) {
+      newErrors.bio = 'Bio limitée à 500 caractères';
+    }
     
-    // Vérification immédiate
-    setTimeout(() => {
-      console.log('⏰ Vérification 100ms après setValue:', {
-        location: watch('location'),
-        department: watch('department'),
-        region: watch('region'),
-        postcode: watch('postcode')
-      });
-    }, 100);
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
-  const handleFormSubmit = async (data: BasicInfoFormData) => {
-    console.log('📤 Données complètes du formulaire à sauvegarder:', data);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!validateForm()) return;
+    
     try {
-      await onSubmit(data);
-      console.log('✅ Sauvegarde terminée');
+      await onSubmit(formData);
     } catch (error) {
-      console.error('❌ Erreur lors de la sauvegarde:', error);
+      console.error('Erreur soumission:', error);
+    }
+  };
+
+  const handleInputChange = (field: string, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    // Effacer l'erreur quand l'utilisateur corrige
+    if (errors[field]) {
+      setErrors(prev => ({ ...prev, [field]: '' }));
     }
   };
 
   return (
-    <div className="p-6">
-      <h2 className="text-2xl font-bold text-gray-800 mb-6">
-        Informations de base
-      </h2>
+    <div className="form-section">
+      <div className="form-section-header">
+        <h2 className="form-section-title">
+          Informations de base
+        </h2>
+        <p className="form-section-subtitle">
+          Renseignez vos informations principales pour créer votre profil
+        </p>
+      </div>
       
-      <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label className="block text-sm font-medium mb-2 text-gray-700">
+      <form onSubmit={handleSubmit} className="space-y-6 max-w-4xl">
+        <div className="form-grid">
+          <div className="form-group">
+            <label className="form-label">
               Nom complet *
             </label>
             <input
-              {...register('name')}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all"
+              type="text"
+              value={formData.name}
+              onChange={(e) => handleInputChange('name', e.target.value)}
+              className={`input-field ${errors.name ? 'error' : ''}`}
               placeholder="Votre nom complet"
+              required
             />
             {errors.name && (
-              <p className="text-red-500 text-sm mt-1">{errors.name.message}</p>
+              <p className="form-error">
+                <span>⚠️</span>
+                {errors.name}
+              </p>
             )}
           </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-2 text-gray-700">
+          <div className="form-group">
+            <label className="form-label">
               Âge
             </label>
             <input
               type="number"
               min="18"
               max="100"
-              {...register('age', { valueAsNumber: true })}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all"
+              value={formData.age}
+              onChange={(e) => handleInputChange('age', parseInt(e.target.value) || '')}
+              className={`input-field ${errors.age ? 'error' : ''}`}
               placeholder="Votre âge"
             />
             {errors.age && (
-              <p className="text-red-500 text-sm mt-1">{errors.age.message}</p>
+              <p className="form-error">
+                <span>⚠️</span>
+                {errors.age}
+              </p>
             )}
           </div>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium mb-2 text-gray-700">
-            Profession
-          </label>
-          <select
-            {...register('profession')}
-            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all"
-          >
-            <option value="">Sélectionnez votre profession</option>
-            {PROFESSIONS.map(profession => (
-              <option key={profession.value} value={profession.value}>
-                {profession.label}
-              </option>
-            ))}
-          </select>
-          {errors.profession && (
-            <p className="text-red-500 text-sm mt-1">{errors.profession.message}</p>
-          )}
+        <div className="form-grid">
+          <div className="form-group">
+            <label className="form-label">
+              Profession
+            </label>
+            <select
+              value={formData.profession}
+              onChange={(e) => handleInputChange('profession', e.target.value)}
+              className="input-field"
+            >
+              <option value="">Sélectionnez votre profession</option>
+              {PROFESSIONS.map(profession => (
+                <option key={profession.value} value={profession.value}>
+                  {profession.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">
+              Localisation
+            </label>
+            <input
+              type="text"
+              value={formData.location}
+              onChange={(e) => handleInputChange('location', e.target.value)}
+              className="input-field"
+              placeholder="Ville, Région"
+            />
+          </div>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium mb-2 text-gray-700">
-            Localisation
-          </label>
-          <LocationAutocomplete
-            value={currentLocation || ''}
-            onChange={handleLocationChange}
-            placeholder="Tapez votre ville..."
-          />
-          {errors.location && (
-            <p className="text-red-500 text-sm mt-1">{errors.location.message}</p>
-          )}
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-2 text-gray-700">
+        <div className="form-group form-grid-full">
+          <label className="form-label">
             Bio
           </label>
           <textarea
-            {...register('bio')}
+            value={formData.bio}
+            onChange={(e) => handleInputChange('bio', e.target.value)}
             rows={4}
             maxLength={500}
-            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all resize-none"
+            className={`input-field ${errors.bio ? 'error' : ''}`}
             placeholder="Parlez un peu de vous..."
           />
-          {errors.bio && (
-            <p className="text-red-500 text-sm mt-1">{errors.bio.message}</p>
-          )}
+          <div className="character-counter">
+            {errors.bio && (
+              <p className="form-error">
+                <span>⚠️</span>
+                {errors.bio}
+              </p>
+            )}
+            <div className="character-count">
+              {formData.bio.length}/500 caractères
+            </div>
+          </div>
         </div>
 
-        <div className="flex gap-4">
+        <div className="section-actions">
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             type="submit"
             disabled={loading}
-            className="flex-1 bg-gradient-to-r from-pink-500 to-rose-500 text-white py-3 px-4 rounded-lg hover:from-pink-600 hover:to-rose-600 disabled:opacity-50 font-medium transition-all"
+            className="btn-section-primary"
           >
-            {loading ? 'Sauvegarde...' : 'Sauvegarder les modifications'}
+            {loading ? (
+              <div className="loading-content">
+                <div className="loading-spinner"></div>
+                Sauvegarde...
+              </div>
+            ) : (
+              'Sauvegarder les modifications'
+            )}
           </motion.button>
           <button
             type="button"
             onClick={onCancel}
-            className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-all"
+            className="btn-section-secondary"
           >
             Annuler
           </button>

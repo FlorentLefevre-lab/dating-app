@@ -1,6 +1,6 @@
 // src/app/api/matches/route.ts - API pour récupérer les matchs
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/lib/auth';
+import { auth } from '../../../auth'
+const session = await auth()
 import { NextRequest, NextResponse } from 'next/server';
 
 // Interfaces pour les matchs

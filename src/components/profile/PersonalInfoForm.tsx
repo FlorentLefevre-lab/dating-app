@@ -1,11 +1,8 @@
-// components/profile/PersonalInfoForm.tsx
-import React, { useEffect, useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
+'use client';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { z } from 'zod';
-import { TagIcon, CheckIcon } from '@heroicons/react/24/outline';
-import { UserProfile } from '../../types/profiles'; 
+import { CheckIcon, TagIcon } from '@heroicons/react/24/outline';
+import { UserProfile, ProfileFormProps } from '../../types/profiles';
 import { 
   GENDERS, 
   PROFESSIONS, 
@@ -13,116 +10,89 @@ import {
   ZODIAC_SIGNS, 
   DIET_TYPES, 
   RELIGIONS, 
-  ETHNICITIES 
-} from '../../types/profiles';
+  ETHNICITIES,
+  INTEREST_OPTIONS 
+} from '../../constants/profileData';
 
-const personalInfoSchema = z.object({
-  gender: z.string().optional().nullable(),
-  profession: z.string().optional().nullable(),
-  maritalStatus: z.string().optional().nullable(),
-  zodiacSign: z.string().optional().nullable(),
-  dietType: z.string().optional().nullable(),
-  religion: z.string().optional().nullable(),
-  ethnicity: z.string().optional().nullable(),
-  interests: z.array(z.string()).optional()
-});
-
-type PersonalInfoFormData = z.infer<typeof personalInfoSchema>;
-
-interface Props {
-  profile: UserProfile | null;
-  loading: boolean;
-  onSubmit: (data: PersonalInfoFormData) => Promise<void>;
-  onCancel: () => void;
-}
-
-const PersonalInfoForm: React.FC<Props> = ({ profile, loading, onSubmit, onCancel }) => {
-  const {
-    register,
-    handleSubmit,
-    setValue,
-    formState: { errors }
-  } = useForm<PersonalInfoFormData>({
-    resolver: zodResolver(personalInfoSchema),
-    defaultValues: {
-      gender: '',
-      profession: '',
-      maritalStatus: '',
-      zodiacSign: '',
-      dietType: '',
-      religion: '',
-      ethnicity: '',
-      interests: []
-    }
+const PersonalInfoForm: React.FC<ProfileFormProps> = ({ 
+  profile, 
+  loading, 
+  onSubmit, 
+  onCancel 
+}) => {
+  const [formData, setFormData] = useState({
+    gender: profile?.gender || '',
+    profession: profile?.profession || '',
+    maritalStatus: profile?.maritalStatus || '',
+    zodiacSign: profile?.zodiacSign || '',
+    dietType: profile?.dietType || '',
+    religion: profile?.religion || '',
+    ethnicity: profile?.ethnicity || '',
+    interests: profile?.interests || []
   });
 
-  // État pour les centres d'intérêt
-  const [userInterests, setUserInterests] = useState<string[]>(
-    profile?.interests || []
-  );
+  const [newInterest, setNewInterest] = useState('');
 
-  // Options d'intérêts disponibles
-  const interestOptions = [
-    'Sport', 'Fitness', 'Yoga', 'Course', 'Natation', 'Football', 'Tennis',
-    'Voyage', 'Aventure', 'Randonnée', 'Camping', 'Photographie',
-    'Musique', 'Concert', 'Festival', 'Danse', 'Chant',
-    'Lecture', 'Écriture', 'Cinéma', 'Série TV', 'Théâtre', 'Art',
-    'Cuisine', 'Gastronomie', 'Vin', 'Bière',
-    'Technologie', 'Gaming', 'Programmation',
-    'Nature', 'Environnement', 'Jardinage', 'Animaux',
-    'Méditation', 'Bien-être', 'Mode', 'Shopping'
-  ];
-
-  useEffect(() => {
-    if (profile) {
-      setValue('gender', profile.gender || '');
-      setValue('profession', profile.profession || '');
-      setValue('maritalStatus', profile.maritalStatus || '');
-      setValue('zodiacSign', profile.zodiacSign || '');
-      setValue('dietType', profile.dietType || '');
-      setValue('religion', profile.religion || '');
-      setValue('ethnicity', profile.ethnicity || '');
-      
-      // Charger les intérêts
-      const interests = profile.interests || [];
-      setUserInterests(interests);
-      setValue('interests', interests);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await onSubmit(formData);
+    } catch (error) {
+      console.error('Erreur soumission:', error);
     }
-  }, [profile, setValue]);
-
-  // Fonction pour gérer les intérêts
-  const handleInterestToggle = (interest: string) => {
-    const newInterests = userInterests.includes(interest)
-      ? userInterests.filter(i => i !== interest)
-      : [...userInterests, interest];
-    
-    setUserInterests(newInterests);
-    setValue('interests', newInterests);
   };
 
-  // Fonction de soumission modifiée pour inclure les intérêts
-  const handleFormSubmit = async (data: PersonalInfoFormData) => {
-    console.log('📤 PersonalInfoForm - Données à sauvegarder:', data);
-    console.log('📋 Vérification ethnicity:', data.ethnicity);
-    await onSubmit(data);
+  const handleInputChange = (field: string, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleInterestToggle = (interest: string) => {
+    const newInterests = formData.interests.includes(interest)
+      ? formData.interests.filter(i => i !== interest)
+      : [...formData.interests, interest];
+    
+    setFormData(prev => ({ ...prev, interests: newInterests }));
+  };
+
+  const addCustomInterest = () => {
+    if (newInterest.trim() && !formData.interests.includes(newInterest.trim()) && formData.interests.length < 15) {
+      setFormData(prev => ({
+        ...prev,
+        interests: [...prev.interests, newInterest.trim()]
+      }));
+      setNewInterest('');
+    }
+  };
+
+  const removeInterest = (interest: string) => {
+    setFormData(prev => ({
+      ...prev,
+      interests: prev.interests.filter(i => i !== interest)
+    }));
   };
 
   return (
-    <div className="p-6">
-      <h2 className="text-2xl font-bold text-gray-800 mb-6">
-        Informations personnelles
-      </h2>
+    <div className="form-section">
+      <div className="form-section-header">
+        <h2 className="form-section-title">
+          Informations personnelles
+        </h2>
+        <p className="form-section-subtitle">
+          Ces informations nous aident à vous proposer de meilleures correspondances
+        </p>
+      </div>
       
-      <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <form onSubmit={handleSubmit} className="space-y-6 max-w-4xl">
+        <div className="form-grid">
           {/* Genre */}
-          <div>
-            <label className="block text-sm font-medium mb-2 text-gray-700">
+          <div className="form-group">
+            <label className="form-label">
               Genre
             </label>
             <select
-              {...register('gender')}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all"
+              value={formData.gender}
+              onChange={(e) => handleInputChange('gender', e.target.value)}
+              className="input-field"
             >
               <option value="">Sélectionnez votre genre</option>
               {GENDERS.map(gender => (
@@ -133,32 +103,15 @@ const PersonalInfoForm: React.FC<Props> = ({ profile, loading, onSubmit, onCance
             </select>
           </div>
 
-          {/* Profession */}
-          <div>
-            <label className="block text-sm font-medium mb-2 text-gray-700">
-              Domaine professionnel
-            </label>
-            <select
-              {...register('profession')}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all"
-            >
-              <option value="">Sélectionnez votre domaine</option>
-              {PROFESSIONS.map(profession => (
-                <option key={profession.value} value={profession.value}>
-                  {profession.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
           {/* Statut marital */}
-          <div>
-            <label className="block text-sm font-medium mb-2 text-gray-700">
+          <div className="form-group">
+            <label className="form-label">
               Statut marital
             </label>
             <select
-              {...register('maritalStatus')}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all"
+              value={formData.maritalStatus}
+              onChange={(e) => handleInputChange('maritalStatus', e.target.value)}
+              className="input-field"
             >
               <option value="">Sélectionnez votre statut</option>
               {MARITAL_STATUS.map(status => (
@@ -170,13 +123,14 @@ const PersonalInfoForm: React.FC<Props> = ({ profile, loading, onSubmit, onCance
           </div>
 
           {/* Signe astrologique */}
-          <div>
-            <label className="block text-sm font-medium mb-2 text-gray-700">
+          <div className="form-group">
+            <label className="form-label">
               Signe astrologique
             </label>
             <select
-              {...register('zodiacSign')}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all"
+              value={formData.zodiacSign}
+              onChange={(e) => handleInputChange('zodiacSign', e.target.value)}
+              className="input-field"
             >
               <option value="">Sélectionnez votre signe</option>
               {ZODIAC_SIGNS.map(sign => (
@@ -188,13 +142,14 @@ const PersonalInfoForm: React.FC<Props> = ({ profile, loading, onSubmit, onCance
           </div>
 
           {/* Régime alimentaire */}
-          <div>
-            <label className="block text-sm font-medium mb-2 text-gray-700">
+          <div className="form-group">
+            <label className="form-label">
               Régime alimentaire
             </label>
             <select
-              {...register('dietType')}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all"
+              value={formData.dietType}
+              onChange={(e) => handleInputChange('dietType', e.target.value)}
+              className="input-field"
             >
               <option value="">Sélectionnez votre régime</option>
               {DIET_TYPES.map(diet => (
@@ -206,13 +161,14 @@ const PersonalInfoForm: React.FC<Props> = ({ profile, loading, onSubmit, onCance
           </div>
 
           {/* Religion */}
-          <div>
-            <label className="block text-sm font-medium mb-2 text-gray-700">
+          <div className="form-group">
+            <label className="form-label">
               Religion / Spiritualité
             </label>
             <select
-              {...register('religion')}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all"
+              value={formData.religion}
+              onChange={(e) => handleInputChange('religion', e.target.value)}
+              className="input-field"
             >
               <option value="">Sélectionnez votre religion</option>
               {RELIGIONS.map(religion => (
@@ -222,91 +178,144 @@ const PersonalInfoForm: React.FC<Props> = ({ profile, loading, onSubmit, onCance
               ))}
             </select>
           </div>
+
+          {/* Origine ethnique */}
+          <div className="form-group">
+            <label className="form-label">
+              Origine ethnique (optionnel)
+            </label>
+            <select
+              value={formData.ethnicity}
+              onChange={(e) => handleInputChange('ethnicity', e.target.value)}
+              className="input-field"
+            >
+              <option value="">Sélectionnez votre origine</option>
+              {ETHNICITIES.map(ethnicity => (
+                <option key={ethnicity.value} value={ethnicity.value}>
+                  {ethnicity.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
-        {/* Origine ethnique */}
-        <div>
-          <label className="block text-sm font-medium mb-2 text-gray-700">
-            Origine ethnique (optionnel)
-          </label>
-          <select
-            {...register('ethnicity')}
-            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all"
-          >
-            <option value="">Sélectionnez votre origine</option>
-            {ETHNICITIES.map(ethnicity => (
-              <option key={ethnicity.value} value={ethnicity.value}>
-                {ethnicity.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* NOUVELLE SECTION : Centres d'intérêt */}
-        <div className="bg-white rounded-xl p-6 border border-gray-200">
-          <div className="flex items-center gap-3 mb-4">
+        {/* Section Centres d'intérêt */}
+        <div className="interests-section">
+          <div className="interests-header">
             <TagIcon className="w-6 h-6 text-purple-500" />
-            <h3 className="text-lg font-semibold text-gray-800">
-              Mes centres d'intérêt ({userInterests.length})
+            <h3 className="interests-title">
+              Mes centres d'intérêt
             </h3>
+            <span className="interests-counter">({formData.interests.length}/15)</span>
           </div>
           
           <p className="text-gray-600 mb-4">
-            Sélectionnez vos centres d'intérêt pour améliorer votre profil et trouver des personnes compatibles
+            Sélectionnez vos centres d'intérêt pour améliorer votre profil
           </p>
-          
-          <div className="flex flex-wrap gap-2">
-            {interestOptions.map((interest) => {
-              const isSelected = userInterests.includes(interest);
-              return (
-                <button
-                  key={interest}
-                  type="button"
-                  onClick={() => handleInterestToggle(interest)}
-                  className={`px-3 py-2 rounded-full border-2 transition-all text-sm ${
-                    isSelected
-                      ? 'border-purple-500 bg-purple-500 text-white'
-                      : 'border-gray-300 text-gray-700 hover:border-purple-300'
-                  }`}
-                >
-                  {isSelected && <CheckIcon className="w-3 h-3 inline mr-1" />}
-                  {interest}
-                </button>
-              );
-            })}
+
+          {/* Ajout d'intérêt personnalisé */}
+          <div className="interests-add-section">
+            <input
+              type="text"
+              value={newInterest}
+              onChange={(e) => setNewInterest(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addCustomInterest())}
+              className="input-field interests-input"
+              placeholder="Ajouter un centre d'intérêt personnalisé"
+              disabled={formData.interests.length >= 15}
+            />
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              type="button"
+              onClick={addCustomInterest}
+              disabled={formData.interests.length >= 15 || !newInterest.trim()}
+              className="interests-add-button"
+            >
+              Ajouter
+            </motion.button>
           </div>
           
-          {userInterests.length > 0 && (
-            <div className="mt-4 p-3 bg-purple-50 border border-purple-200 rounded-lg">
-              <p className="text-sm text-purple-700">
-                <span className="font-medium">Vos intérêts :</span> {userInterests.join(', ')}
+          {/* Options prédéfinies */}
+          <div className="interests-predefined">
+            <div className="interests-grid">
+              {INTEREST_OPTIONS.map((interest) => {
+                const isSelected = formData.interests.includes(interest);
+                return (
+                  <motion.button
+                    key={interest}
+                    type="button"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => handleInterestToggle(interest)}
+                    className={`interest-tag-predefined ${isSelected ? 'selected' : 'unselected'}`}
+                  >
+                    {isSelected && <CheckIcon className="w-3 h-3 inline mr-1" />}
+                    {interest}
+                  </motion.button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Intérêts sélectionnés */}
+          {formData.interests.length > 0 && (
+            <div className="interests-selected">
+              <p className="interests-selected-header">
+                <span className="font-medium">Vos intérêts sélectionnés :</span>
               </p>
+              <div className="interests-selected-list">
+                {formData.interests.map((interest, index) => (
+                  <motion.span
+                    key={index}
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="interest-tag-selected"
+                  >
+                    {interest}
+                    <button
+                      type="button"
+                      onClick={() => removeInterest(interest)}
+                      className="interest-tag-remove"
+                    >
+                      ×
+                    </button>
+                  </motion.span>
+                ))}
+              </div>
             </div>
           )}
         </div>
 
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <h4 className="font-medium text-blue-800 mb-2">ℹ️ À propos de ces informations</h4>
-          <p className="text-sm text-blue-700">
+        <div className="info-box">
+          <h4 className="info-box-title">ℹ️ À propos de ces informations</h4>
+          <p className="info-box-text">
             Ces informations nous aident à vous proposer des correspondances plus pertinentes.
             Vous pouvez choisir de ne pas renseigner certains champs si vous préférez.
           </p>
         </div>
 
-        <div className="flex gap-4">
+        <div className="section-actions">
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             type="submit"
             disabled={loading}
-            className="flex-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white py-3 px-4 rounded-lg hover:from-purple-600 hover:to-pink-600 disabled:opacity-50 font-medium transition-all"
+            className="btn-section-primary"
           >
-            {loading ? 'Sauvegarde...' : 'Sauvegarder les informations'}
+            {loading ? (
+              <div className="loading-content">
+                <div className="loading-spinner"></div>
+                Sauvegarde...
+              </div>
+            ) : (
+              'Sauvegarder les informations'
+            )}
           </motion.button>
           <button
             type="button"
             onClick={onCancel}
-            className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-all"
+            className="btn-section-secondary"
           >
             Annuler
           </button>

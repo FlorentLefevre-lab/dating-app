@@ -7,7 +7,9 @@ import { CldUploadWidget, CldImage } from 'next-cloudinary';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TrashIcon, StarIcon } from '@heroicons/react/24/outline';
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
-import { profileSchema, preferencesSchema, ProfileFormData, PreferencesFormData } from '../lib/validations/profile';
+import { profileSchema, preferencesSchema, ProfileFormData, PreferencesFormData } from './../../lib/validations/profile';
+
+
 
 interface Photo {
   id: string;

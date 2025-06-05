@@ -1,7 +1,6 @@
 // app/api/user/delete-account/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { auth } from '../../../../auth'
 import { prisma } from '@/lib/db';
 
 export async function DELETE(request: NextRequest) {
@@ -25,7 +24,7 @@ export async function DELETE(request: NextRequest) {
     let userEmail;
     
     try {
-      session = await getServerSession(authOptions);
+      const session = await auth()
       userId = session?.user?.id;
       userEmail = session?.user?.email;
       console.log('✅ Session valide trouvée:', { userId, userEmail });

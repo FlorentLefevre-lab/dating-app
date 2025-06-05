@@ -1,6 +1,6 @@
 // src/app/api/discover/route.ts - API Discover corrigée
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/lib/auth';
+import { auth } from '../../../auth'
+const session = await auth()
 import { NextRequest, NextResponse } from 'next/server';
 
 // Interface pour les utilisateurs découvrables

@@ -1,4 +1,3 @@
-// components/profile/PhotosManager.tsx
 'use client';
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -6,27 +5,18 @@ import {
   PhotoIcon, 
   TrashIcon, 
   ArrowUpTrayIcon,
-  ExclamationCircleIcon,
+  ExclamationTriangleIcon,
   StarIcon,
   CameraIcon
 } from '@heroicons/react/24/outline';
 
-// Types pour Cloudinary
+import { Photo, PhotosManagerProps } from '../../types/profiles';
+
+// Déclaration TypeScript pour Cloudinary
 declare global {
   interface Window {
     cloudinary: any;
   }
-}
-
-interface Photo {
-  id: string;
-  url: string;
-  isPrimary?: boolean;
-}
-
-interface PhotosManagerProps {
-  photos: Photo[];
-  onMessage: (message: string, type: 'success' | 'error') => void;
 }
 
 const PhotosManager: React.FC<PhotosManagerProps> = ({ photos, onMessage }) => {
@@ -34,12 +24,13 @@ const PhotosManager: React.FC<PhotosManagerProps> = ({ photos, onMessage }) => {
   const [uploading, setUploading] = useState(false);
   const [cloudinaryLoaded, setCloudinaryLoaded] = useState(false);
 
-  // Charger les photos au montage du composant
-  // Charger le script Cloudinary
+  // Synchroniser avec les props
   useEffect(() => {
-    console.log('🔍 PhotosManager monté, photos reçues:', photos);
-    loadPhotosFromAPI(); // Toujours recharger pour être sûr
-  }, []);
+    setLocalPhotos(photos);
+    loadPhotosFromAPI();
+  }, [photos]);
+
+  // Charger le script Cloudinary
   useEffect(() => {
     const loadCloudinaryWidget = () => {
       if (window.cloudinary) {
@@ -64,25 +55,14 @@ const PhotosManager: React.FC<PhotosManagerProps> = ({ photos, onMessage }) => {
     loadCloudinaryWidget();
   }, [onMessage]);
 
-  // Synchroniser avec les props ET recharger depuis l'API
-  useEffect(() => {
-    setLocalPhotos(photos);
-    // Si pas de photos dans les props, recharger depuis l'API
-    if (photos.length === 0) {
-      loadPhotosFromAPI();
-    }
-  }, [photos]);
-
   // Charger les photos depuis l'API
   const loadPhotosFromAPI = async () => {
     try {
-      console.log('🔄 Rechargement des photos depuis l\'API...');
       const response = await fetch('/api/profile/photos');
       
       if (response.ok) {
         const data = await response.json();
         const apiPhotos = data.photos || [];
-        console.log('✅ Photos chargées:', apiPhotos);
         setLocalPhotos(apiPhotos);
       }
     } catch (error) {
@@ -105,34 +85,21 @@ const PhotosManager: React.FC<PhotosManagerProps> = ({ photos, onMessage }) => {
       return;
     }
 
-    console.log('🔧 Config Cloudinary:', { cloudName, uploadPreset });
-
     const widget = window.cloudinary.createUploadWidget(
       {
         cloudName: cloudName,
         uploadPreset: uploadPreset,
-        sources: [
-          'local',      // Fichiers locaux
-          'camera',     // Caméra
-          'image_search', // Recherche d'images
-          'url'         // URL
-        ],
+        sources: ['local', 'camera', 'image_search', 'url'],
         multiple: true,
-        maxFiles: 6 - localPhotos.length, // Limite selon photos existantes
+        maxFiles: 6 - localPhotos.length,
         maxFileSize: 10000000, // 10MB
-        maxImageFileSize: 10000000,
-        maxVideoFileSize: 0, // Pas de vidéo
         resourceType: 'image',
         clientAllowedFormats: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
         maxImageWidth: 2000,
         maxImageHeight: 2000,
         cropping: true,
-        croppingAspectRatio: 1, // Carré
-        showAdvancedOptions: false,
-        showInsecurePreview: false,
-        showUploadMoreButton: true,
-        folder: 'dating_app_photos', // Dossier dans Cloudinary
-        publicId: `user_photo_${Date.now()}`,
+        croppingAspectRatio: 1,
+        folder: 'dating_app_photos',
         theme: 'minimal',
         styles: {
           palette: {
@@ -146,29 +113,7 @@ const PhotosManager: React.FC<PhotosManagerProps> = ({ photos, onMessage }) => {
             action: '#ec4899',
             inProgress: '#ec4899',
             complete: '#10b981',
-            error: '#ef4444',
-            textDark: '#1f2937',
-            textLight: '#6b7280'
-          }
-        },
-        text: {
-          en: {
-            'queue.title': 'Ajout de photos',
-            'queue.title_uploading_with_counter': 'Upload de {{num}} photos',
-            'queue.title_processing_with_counter': 'Traitement de {{num}} photos',
-            'queue.title_uploading_processing_with_counter': 'Préparation de {{num}} photos',
-            'queue.upload_more': 'Ajouter plus de photos',
-            'local.browse': 'Parcourir',
-            'local.dd_title_single': 'Glissez une photo ici',
-            'local.dd_title_multi': 'Glissez vos photos ici',
-            'camera.capture': 'Prendre une photo',
-            'camera.switch_camera': 'Changer de caméra',
-            'camera.take_pic': 'Capturer',
-            'camera.retake': 'Reprendre',
-            'sources.local.title': 'Mes fichiers',
-            'sources.camera.title': 'Caméra',
-            'sources.image_search.title': 'Recherche',
-            'sources.url.title': 'URL'
+            error: '#ef4444'
           }
         }
       },
@@ -180,26 +125,20 @@ const PhotosManager: React.FC<PhotosManagerProps> = ({ photos, onMessage }) => {
           return;
         }
 
-        console.log('📡 Résultat Cloudinary:', result);
-
         if (result && result.event === 'success') {
-          console.log('✅ Photo uploadée:', result.info.secure_url);
           savePhotoToDatabase(result.info.secure_url);
         }
 
         if (result && result.event === 'queues-start') {
           setUploading(true);
-          console.log('🔄 Début upload...');
         }
 
         if (result && result.event === 'queues-end') {
           setUploading(false);
-          console.log('✅ Upload terminé');
         }
 
         if (result && result.event === 'close') {
           setUploading(false);
-          console.log('🔒 Widget fermé');
         }
       }
     );
@@ -210,8 +149,6 @@ const PhotosManager: React.FC<PhotosManagerProps> = ({ photos, onMessage }) => {
   // Sauvegarder en base de données
   const savePhotoToDatabase = async (imageUrl: string) => {
     try {
-      console.log('💾 Sauvegarde en base:', imageUrl);
-
       const response = await fetch('/api/profile/photos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -222,21 +159,16 @@ const PhotosManager: React.FC<PhotosManagerProps> = ({ photos, onMessage }) => {
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ Erreur sauvegarde:', response.status, errorText);
         throw new Error(`Erreur base de données: ${response.status}`);
       }
 
       const savedPhoto = await response.json();
-      console.log('✅ Photo sauvegardée:', savedPhoto);
-
       setLocalPhotos(prev => [...prev, savedPhoto]);
       onMessage('Photo ajoutée avec succès !', 'success');
 
-      // Recharger toutes les photos pour être sûr
       setTimeout(() => loadPhotosFromAPI(), 1000);
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Erreur sauvegarde photo:', error);
       onMessage(`Erreur: ${error.message}`, 'error');
     }
@@ -244,6 +176,8 @@ const PhotosManager: React.FC<PhotosManagerProps> = ({ photos, onMessage }) => {
 
   // Supprimer une photo
   const deletePhoto = async (photoId: string) => {
+    if (!confirm('Êtes-vous sûr de vouloir supprimer cette photo ?')) return;
+
     try {
       const response = await fetch(`/api/profile/photos/${photoId}`, {
         method: 'DELETE',
@@ -288,13 +222,13 @@ const PhotosManager: React.FC<PhotosManagerProps> = ({ photos, onMessage }) => {
   const canAddMore = localPhotos.length < 6;
 
   return (
-    <div className="p-6">
+    <div className="form-section">
       {/* Header */}
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-800 mb-2">
+      <div className="form-section-header">
+        <h2 className="form-section-title">
           Mes Photos ({localPhotos.length}/6)
         </h2>
-        <p className="text-gray-600">
+        <p className="form-section-subtitle">
           Ajoutez vos meilleures photos pour attirer l'attention
         </p>
       </div>
@@ -302,18 +236,16 @@ const PhotosManager: React.FC<PhotosManagerProps> = ({ photos, onMessage }) => {
       {/* Bouton d'upload Cloudinary */}
       {canAddMore && (
         <div className="mb-8">
-          <button
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
             onClick={openCloudinaryWidget}
             disabled={uploading || !cloudinaryLoaded}
-            className={`w-full h-32 border-2 border-dashed rounded-xl transition-all duration-200 ${
-              uploading || !cloudinaryLoaded
-                ? 'border-gray-300 bg-gray-50 cursor-not-allowed'
-                : 'border-pink-300 bg-pink-50 hover:bg-pink-100 hover:border-pink-400 cursor-pointer'
-            }`}
+            className={`upload-area ${uploading || !cloudinaryLoaded ? 'disabled' : ''}`}
           >
             {uploading ? (
               <div className="flex flex-col items-center justify-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500 mb-3"></div>
+                <div className="loading-spinner mb-3"></div>
                 <span className="text-gray-600 font-medium">Upload en cours...</span>
                 <span className="text-sm text-gray-500">Traitement de vos photos</span>
               </div>
@@ -337,13 +269,13 @@ const PhotosManager: React.FC<PhotosManagerProps> = ({ photos, onMessage }) => {
                 </span>
               </div>
             )}
-          </button>
+          </motion.button>
         </div>
       )}
 
       {/* Grille des photos */}
       {localPhotos.length > 0 ? (
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+        <div className="photos-grid mb-6">
           <AnimatePresence>
             {localPhotos.map((photo, index) => (
               <motion.div
@@ -351,7 +283,8 @@ const PhotosManager: React.FC<PhotosManagerProps> = ({ photos, onMessage }) => {
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.8 }}
-                className="relative group aspect-square rounded-xl overflow-hidden bg-gray-100 shadow-lg"
+                whileHover={{ scale: 1.02 }}
+                className="photo-card"
               >
                 <img
                   src={photo.url}
@@ -373,27 +306,31 @@ const PhotosManager: React.FC<PhotosManagerProps> = ({ photos, onMessage }) => {
                 </div>
 
                 {/* Overlay avec actions */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300">
+                <div className="photo-overlay">
                   <div className="absolute bottom-3 left-3 right-3 flex justify-between items-center">
                     {/* Bouton définir comme principale */}
                     {!photo.isPrimary && (
-                      <button
+                      <motion.button
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
                         onClick={() => setPrimaryPhoto(photo.id)}
                         className="bg-white/90 backdrop-blur-sm text-gray-700 p-2.5 rounded-lg hover:bg-white transition-all shadow-lg"
                         title="Définir comme photo principale"
                       >
                         <StarIcon className="w-4 h-4" />
-                      </button>
+                      </motion.button>
                     )}
 
                     {/* Bouton supprimer */}
-                    <button
+                    <motion.button
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
                       onClick={() => deletePhoto(photo.id)}
                       className="bg-red-500/90 backdrop-blur-sm text-white p-2.5 rounded-lg hover:bg-red-600 transition-all shadow-lg ml-auto"
                       title="Supprimer cette photo"
                     >
                       <TrashIcon className="w-4 h-4" />
-                    </button>
+                    </motion.button>
                   </div>
                 </div>
               </motion.div>
@@ -420,10 +357,10 @@ const PhotosManager: React.FC<PhotosManagerProps> = ({ photos, onMessage }) => {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6"
+          className="alert alert-warning mb-6"
         >
           <div className="flex items-start gap-3">
-            <ExclamationCircleIcon className="w-6 h-6 text-amber-600 flex-shrink-0 mt-0.5" />
+            <ExclamationTriangleIcon className="w-6 h-6 text-amber-600 flex-shrink-0 mt-0.5" />
             <div>
               <h4 className="font-semibold text-amber-800 mb-1">
                 Limite de photos atteinte
@@ -436,6 +373,20 @@ const PhotosManager: React.FC<PhotosManagerProps> = ({ photos, onMessage }) => {
           </div>
         </motion.div>
       )}
+
+      {/* Conseils pour de meilleures photos */}
+      <div className="info-box">
+        <h4 className="info-box-title">
+          💡 Conseils pour de meilleures photos
+        </h4>
+        <ul className="info-box-text space-y-2">
+          <li>• Utilisez des photos récentes et de bonne qualité</li>
+          <li>• Montrez votre visage clairement sur votre photo principale</li>
+          <li>• Variez les types de photos : portrait, corps entier, activités</li>
+          <li>• Évitez les filtres trop prononcés</li>
+          <li>• Souriez naturellement !</li>
+        </ul>
+      </div>
     </div>
   );
 };
