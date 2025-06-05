@@ -46,10 +46,8 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/chat/:path*', 
     '/discover/:path*',
     '/matches/:path*',
-    '/profile/:path*',
-    '/socket.io/:path*'
+    '/profile/:path*'
   ],
 };

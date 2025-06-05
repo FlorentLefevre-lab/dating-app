@@ -101,18 +101,44 @@ async function main() {
     const hashedPassword = await bcrypt.hash(defaultPassword, 12);
     console.log(`🔒 Mot de passe par défaut pour tous les utilisateurs: "${defaultPassword}"`);
 
-    // 1. Nettoyer les données existantes
-    console.log('🧹 Nettoyage des données existantes...');
+    // 1. Nettoyer TOUTES les données existantes
+    console.log('🧹 Nettoyage complet de la base de données...');
+    
+    // Supprimer dans l'ordre pour respecter les contraintes de clés étrangères
     await prisma.message.deleteMany();
+    console.log('  ✓ Messages supprimés');
+    
     await prisma.dislike.deleteMany();
+    console.log('  ✓ Dislikes supprimés');
+    
     await prisma.like.deleteMany();
+    console.log('  ✓ Likes supprimés');
+    
     await prisma.profileView.deleteMany();
+    console.log('  ✓ Vues de profil supprimées');
+    
     await prisma.photo.deleteMany();
+    console.log('  ✓ Photos supprimées');
+    
     await prisma.userPreferences.deleteMany();
-    // Ne pas supprimer les utilisateurs car ils peuvent être liés à NextAuth
+    console.log('  ✓ Préférences supprimées');
+    
+    // Supprimer les sessions et comptes NextAuth
+    await prisma.session.deleteMany();
+    console.log('  ✓ Sessions supprimées');
+    
+    await prisma.account.deleteMany();
+    console.log('  ✓ Comptes supprimés');
+    
+    // Maintenant on peut supprimer tous les utilisateurs
+    await prisma.user.deleteMany();
+    console.log('  ✓ Utilisateurs supprimés');
+    
+    console.log('✅ Base de données complètement nettoyée');
 
     // 2. Créer 100 utilisateurs de test
-    console.log('👥 Création de 100 utilisateurs...');
+    console.log('\n👥 Création de 100 utilisateurs...');
+    console.log('✉️ Tous les emails seront marqués comme vérifiés');
     
     const users = [];
     
@@ -128,19 +154,9 @@ async function main() {
       const interests = randomChoices(centresInteret, randomInt(3, 8));
       const bio = randomChoice(bios);
       
-      const user = await prisma.user.upsert({
-        where: { email },
-        update: {
-          name,
-          age,
-          bio,
-          location,
-          profession,
-          gender,
-          interests,
-          hashedPassword
-        },
-        create: {
+      // Utiliser create au lieu de upsert car on a supprimé tous les utilisateurs
+      const user = await prisma.user.create({
+        data: {
           email,
           name,
           age,
@@ -150,20 +166,26 @@ async function main() {
           gender,
           interests,
           hashedPassword,
+          emailVerified: new Date(), // ✅ EMAIL VÉRIFIÉ AUTOMATIQUEMENT
           primaryAuthMethod: 'EMAIL_PASSWORD'
         }
       });
       
       users.push(user);
+      
+      // Afficher la progression
+      if ((i + 1) % 10 === 0) {
+        console.log(`  ✓ ${i + 1} utilisateurs créés...`);
+      }
     }
 
-    console.log(`✅ ${users.length} utilisateurs créés`);
+    console.log(`✅ ${users.length} utilisateurs créés avec emails vérifiés`);
 
     // Récupérer tous les IDs des utilisateurs
     const userIds = users.map(user => user.id);
 
     // 3. Créer des likes aléatoires (environ 200-300 likes)
-    console.log('❤️ Création des likes...');
+    console.log('\n❤️ Création des likes...');
     
     const targetLikeCount = randomInt(200, 300);
     const likePairs = generateRandomPairs(userIds, targetLikeCount);
@@ -182,7 +204,7 @@ async function main() {
     console.log(`✅ ${likes.length} likes créés`);
 
     // 4. Créer des dislikes aléatoires (environ 150-200 dislikes)
-    console.log('👎 Création des dislikes...');
+    console.log('\n👎 Création des dislikes...');
     
     const targetDislikeCount = randomInt(150, 200);
     const existingLikePairs = new Set(likePairs.map(([a, b]) => [a, b].sort().join('-')));
@@ -217,47 +239,105 @@ async function main() {
     
     console.log(`✅ ${dislikes.length} dislikes créés`);
 
-    // 5. Créer des matchs (likes réciproques) - environ 50-80 matchs
-    console.log('💕 Création des matchs (likes réciproques)...');
+    // 5. NOUVEAU : Créer des matchs à partir des likes existants
+    console.log('\n💕 Création de matchs à partir des likes existants...');
     
-    const matchCount = randomInt(50, 80);
-    const matchPairs = generateRandomPairs(userIds, matchCount);
+    // Sélectionner aléatoirement 30-50% des likes pour créer des matchs
+    const matchPercentage = randomInt(30, 50) / 100;
+    const potentialMatches = randomChoices(likes, Math.floor(likes.length * matchPercentage));
     
-    // Filtrer les paires qui n'ont pas déjà de likes ou dislikes
-    const existingPairs = new Set([
-      ...likePairs.map(([a, b]) => [a, b].sort().join('-')),
-      ...dislikePairs.map(([a, b]) => [a, b].sort().join('-'))
-    ]);
+    let matchesCreated = 0;
+    const matchedPairs = new Set<string>();
     
-    const filteredMatchPairs = matchPairs.filter(([a, b]) => {
-      const pairKey = [a, b].sort().join('-');
-      return !existingPairs.has(pairKey);
-    });
-    
-    const matchLikes = [];
-    for (const [user1, user2] of filteredMatchPairs) {
-      // Créer les deux likes réciproques pour former un match
-      const like1 = await prisma.like.create({
-        data: {
-          senderId: user1,
-          receiverId: user2
+    for (const like of potentialMatches) {
+      const pairKey = [like.senderId, like.receiverId].sort().join('-');
+      
+      // Vérifier si on n'a pas déjà créé ce match
+      if (matchedPairs.has(pairKey)) continue;
+      
+      // Vérifier si le like réciproque n'existe pas déjà
+      const reciprocalExists = await prisma.like.findFirst({
+        where: {
+          senderId: like.receiverId,
+          receiverId: like.senderId
         }
       });
       
-      const like2 = await prisma.like.create({
-        data: {
-          senderId: user2,
-          receiverId: user1
-        }
-      });
-      
-      matchLikes.push(like1, like2);
+      if (!reciprocalExists) {
+        // Créer le like réciproque pour former un match
+        await prisma.like.create({
+          data: {
+            senderId: like.receiverId,
+            receiverId: like.senderId
+          }
+        });
+        matchesCreated++;
+        matchedPairs.add(pairKey);
+      }
     }
     
-    console.log(`✅ ${filteredMatchPairs.length} matchs créés (${matchLikes.length} likes réciproques)`);
+    console.log(`✅ ${matchesCreated} nouveaux matchs créés à partir des likes existants`);
+    
+    // 6. Créer des matchs supplémentaires directs (50-80 matchs au total)
+    console.log('\n💕 Création de matchs supplémentaires...');
+    
+    const targetTotalMatches = randomInt(50, 80);
+    const additionalMatchesNeeded = Math.max(0, targetTotalMatches - matchesCreated);
+    
+    if (additionalMatchesNeeded > 0) {
+      const matchPairs = generateRandomPairs(userIds, additionalMatchesNeeded);
+      
+      // Filtrer les paires qui n'ont pas déjà de likes ou dislikes
+      const existingPairs = new Set([
+        ...likePairs.map(([a, b]) => [a, b].sort().join('-')),
+        ...dislikePairs.map(([a, b]) => [a, b].sort().join('-')),
+        ...Array.from(matchedPairs)
+      ]);
+      
+      const filteredMatchPairs = matchPairs.filter(([a, b]) => {
+        const pairKey = [a, b].sort().join('-');
+        return !existingPairs.has(pairKey);
+      });
+      
+      let additionalMatchesCreated = 0;
+      for (const [user1, user2] of filteredMatchPairs) {
+        // Créer les deux likes réciproques pour former un match
+        await prisma.like.create({
+          data: {
+            senderId: user1,
+            receiverId: user2
+          }
+        });
+        
+        await prisma.like.create({
+          data: {
+            senderId: user2,
+            receiverId: user1
+          }
+        });
+        
+        additionalMatchesCreated++;
+        matchedPairs.add([user1, user2].sort().join('-'));
+      }
+      
+      console.log(`✅ ${additionalMatchesCreated} matchs supplémentaires créés`);
+      matchesCreated += additionalMatchesCreated;
+    }
+    
+    console.log(`✅ TOTAL: ${matchesCreated} matchs (likes réciproques) dans la base`);
 
-    // 6. Créer quelques messages entre les utilisateurs qui ont des matchs
-    console.log('💬 Création des messages de test...');
+    // 7. Créer quelques messages entre les utilisateurs qui ont des matchs
+    console.log('\n💬 Création des messages entre les matchs...');
+    
+    // Récupérer tous les matchs (likes réciproques)
+    const allMatches = await prisma.$queryRaw<Array<{senderId: string, receiverId: string}>>`
+      SELECT DISTINCT l1."senderId", l1."receiverId"
+      FROM "Like" l1
+      INNER JOIN "Like" l2 ON l1."senderId" = l2."receiverId" AND l1."receiverId" = l2."senderId"
+      WHERE l1."senderId" < l1."receiverId"
+    `;
+    
+    console.log(`   📊 ${allMatches.length} matchs trouvés pour créer des conversations`);
     
     const messages = [];
     const messageTemplates = [
@@ -267,21 +347,26 @@ async function main() {
       'Coucou ! Tu fais quoi de beau ?',
       'Hello ! On a des goûts similaires on dirait 😄',
       'Salut ! Tu habites dans quelle partie de la ville ?',
-      'Hey ! Fan de [intérêt] aussi à ce que je vois !',
+      'Hey ! Fan de cuisine aussi à ce que je vois !',
       'Bonjour ! Tu as l\'air intéressant(e) 😊',
       'Coucou ! Envie de discuter ?',
-      'Hello ! Beau sourire sur tes photos ! 😍'
+      'Hello ! Beau sourire sur tes photos ! 😍',
+      'Salut ! J\'ai vu qu\'on avait matché 🎉',
+      'Hey ! Content(e) qu\'on ait matché !',
+      'Bonjour ! Qu\'est-ce qui t\'a plu dans mon profil ? 😊',
+      'Coucou ! Tu préfères les restos ou les soirées Netflix ? 🍿',
+      'Hello ! Tu as des plans pour le weekend ?'
     ];
     
-    // Créer des messages pour environ 30% des matchs
-    const messagesToCreate = Math.floor(filteredMatchPairs.length * 0.3);
-    const selectedPairs = randomChoices(filteredMatchPairs, messagesToCreate);
+    // Créer des messages pour 60-80% des matchs
+    const messagePercentage = randomInt(60, 80) / 100;
+    const matchesWithMessages = randomChoices(allMatches, Math.floor(allMatches.length * messagePercentage));
     
-    for (const [user1, user2] of selectedPairs) {
-      // 1-3 messages par conversation
-      const messageCount = randomInt(1, 3);
-      let currentSender = user1;
-      let currentReceiver = user2;
+    for (const match of matchesWithMessages) {
+      // 2-5 messages par conversation pour les matchs
+      const messageCount = randomInt(2, 5);
+      let currentSender = match.senderId;
+      let currentReceiver = match.receiverId;
       
       for (let i = 0; i < messageCount; i++) {
         const message = await prisma.message.create({
@@ -298,10 +383,10 @@ async function main() {
       }
     }
     
-    console.log(`✅ ${messages.length} messages créés`);
+    console.log(`✅ ${messages.length} messages créés pour ${matchesWithMessages.length} conversations`);
 
-    // 7. Créer des vues de profil aléatoires
-    console.log('👀 Création des vues de profil...');
+    // 8. Créer des vues de profil aléatoires
+    console.log('\n👀 Création des vues de profil...');
     
     const targetProfileViewCount = randomInt(300, 500);
     const profileViewPairs = generateRandomPairs(userIds, targetProfileViewCount);
@@ -319,36 +404,53 @@ async function main() {
     
     console.log(`✅ ${profileViews.length} vues de profil créées`);
 
-    console.log('🎉 Seed terminé avec succès !');
+    console.log('\n🎉 Seed terminé avec succès !');
     
-    // 8. Afficher un résumé complet
+    // 9. Afficher un résumé complet
     const finalUserCount = await prisma.user.count();
     const finalLikeCount = await prisma.like.count();
     const finalDislikeCount = await prisma.dislike.count();
     const finalMessageCount = await prisma.message.count();
     const finalProfileViewCount = await prisma.profileView.count();
+    const verifiedEmailCount = await prisma.user.count({
+      where: { emailVerified: { not: null } }
+    });
+    
+    // Calculer les vraies statistiques des matchs
+    const realMatches = await prisma.$queryRaw<Array<{count: bigint}>>`
+      SELECT COUNT(*) as count
+      FROM (
+        SELECT DISTINCT l1."senderId", l1."receiverId"
+        FROM "Like" l1
+        INNER JOIN "Like" l2 ON l1."senderId" = l2."receiverId" AND l1."receiverId" = l2."senderId"
+        WHERE l1."senderId" < l1."receiverId"
+      ) as matches
+    `;
+    
+    const matchCount = Number(realMatches[0].count);
     
     console.log('\n📊 Résumé de la base PostgreSQL :');
     console.log(`   👥 Utilisateurs: ${finalUserCount}`);
+    console.log(`   ✉️ Emails vérifiés: ${verifiedEmailCount}/${finalUserCount}`);
     console.log(`   ❤️ Likes: ${finalLikeCount}`);
     console.log(`   👎 Dislikes: ${finalDislikeCount}`);
-    console.log(`   💕 Matchs (likes réciproques): ${filteredMatchPairs.length}`);
+    console.log(`   💕 Matchs (likes réciproques): ${matchCount}`);
     console.log(`   💬 Messages: ${finalMessageCount}`);
     console.log(`   👀 Vues de profil: ${finalProfileViewCount}`);
     
-    // Calculer les statistiques des matchs
-    const reciprocalLikes = await prisma.$queryRaw`
-      SELECT l1."senderId", l1."receiverId"
-      FROM "Like" l1
-      INNER JOIN "Like" l2 ON l1."senderId" = l2."receiverId" AND l1."receiverId" = l2."senderId"
-      WHERE l1."senderId" < l1."receiverId"
-    `;
-    
-    console.log(`   💑 Paires avec likes réciproques: ${(reciprocalLikes as any[]).length}`);
+    // Afficher quelques utilisateurs exemples
+    const exampleUsers = await prisma.user.findMany({
+      take: 5,
+      orderBy: { createdAt: 'asc' }
+    });
     
     console.log('\n🔐 Informations de connexion :');
-    console.log(`   📧 Email: n'importe quel email d'utilisateur (ex: david.martin0@test.com)`);
+    console.log(`   📧 Exemples d'emails :`);
+    exampleUsers.forEach((user, index) => {
+      console.log(`      ${index + 1}. ${user.email}`);
+    });
     console.log(`   🔑 Mot de passe: "${defaultPassword}" (pour tous les utilisateurs)`);
+    console.log(`   ✅ Tous les emails sont pré-vérifiés`);
     
     console.log('\n✨ Base de données prête pour les tests !');
 

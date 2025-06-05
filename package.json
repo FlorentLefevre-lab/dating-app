@@ -3,9 +3,22 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "node server.js",
+    "dev:next": "next dev",
     "build": "next build",
-    "start": "NODE_ENV=production node server.js"
+    "start": "concurrently \"npm run start:next\" \"npm run start:socket\"",
+    "lint": "next lint",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:push": "prisma db push",
+    "db:seed": "prisma db seed",
+    "db:reset": "prisma migrate reset",
+    "db:studio": "prisma studio",
+    "db:fresh": "prisma migrate reset --force",
+    "db:validate": "prisma validate",
+    "db:format": "prisma format"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.9.1",
