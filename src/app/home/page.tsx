@@ -1,4 +1,4 @@
-// src/app/page.tsx - Version corrigée pour les erreurs de nesting DOM
+// src/app/page.tsx - Version intégrée avec l'API Discover
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -10,15 +10,50 @@ import { RecentActivity } from './../../components/profile/RecentActivity'
 import { StatsDashboard } from './../../components/profile/StatsDashboard'
 import { useRealTimeStats } from './../../hooks/useRealTimeStats'
 
-// Types pour les données mockées (à conserver pour la découverte)
-interface User {
+// ================================
+// TYPES POUR L'API DISCOVER
+// ================================
+
+interface DiscoverUser {
   id: string
   name: string
   age: number
-  avatar: string
-  distance: number
+  bio: string
+  location: string
+  profession: string
   interests: string[]
+  photos: Array<{
+    id: string
+    url: string
+    isPrimary: boolean
+  }>
+  compatibility: number
   isOnline: boolean
+  memberSince: string
+}
+
+interface DiscoverApiResponse {
+  success: boolean
+  users: DiscoverUser[]
+  stats: {
+    totalUsers: number
+    excludedCount: number
+    discoverableCount: number
+    avgCompatibility: number
+  }
+  currentUser: {
+    id: string
+    interests: string[]
+    age: number | null
+    location: string | null
+  }
+  meta: {
+    timestamp: string
+    algorithm: string
+    responseTime?: number
+    cacheHit?: boolean
+  }
+  error?: string
 }
 
 export default function HomePage() {
@@ -35,81 +70,242 @@ export default function HomePage() {
     lastUpdated
   } = useRealTimeStats(30000) // Refresh toutes les 30 secondes
 
-  // États locaux pour la section découverte (toujours mockée)
-  const [discoveryUsers, setDiscoveryUsers] = useState<User[]>([])
+  // ================================
+  // ÉTATS POUR LA DÉCOUVERTE (API)
+  // ================================
+  
+  const [discoveryUsers, setDiscoveryUsers] = useState<DiscoverUser[]>([])
   const [currentUserIndex, setCurrentUserIndex] = useState(0)
+  const [discoverLoading, setDiscoverLoading] = useState(true)
+  const [discoverError, setDiscoverError] = useState<string | null>(null)
+  const [isMatch, setIsMatch] = useState(false)
+  const [matchUser, setMatchUser] = useState<{ id: string; name: string } | null>(null)
 
-  // Données mockées pour la découverte (en attendant la vraie implémentation)
-  const mockUsers: User[] = [
-    {
-      id: '1',
-      name: 'Sophie',
-      age: 26,
-      avatar: '👩‍🦰',
-      distance: 2.5,
-      interests: ['Yoga', 'Photographie', 'Voyage'],
-      isOnline: true
-    },
-    {
-      id: '2',
-      name: 'Emma',
-      age: 24,
-      avatar: '👱‍♀️',
-      distance: 1.8,
-      interests: ['Cuisine', 'Musique', 'Randonnée'],
-      isOnline: false
-    },
-    {
-      id: '3',
-      name: 'Léa',
-      age: 28,
-      avatar: '👩‍🦱',
-      distance: 3.2,
-      interests: ['Art', 'Lecture', 'Cinéma'],
-      isOnline: true
-    },
-    {
-      id: '4',
-      name: 'Chloé',
-      age: 25,
-      avatar: '👩',
-      distance: 4.1,
-      interests: ['Sport', 'Voyage', 'Danse'],
-      isOnline: false
+  const currentUser = discoveryUsers[currentUserIndex]
+
+  // ================================
+  // CHARGEMENT DES PROFILS DISCOVER
+  // ================================
+
+  const loadDiscoverProfiles = async () => {
+    try {
+      setDiscoverLoading(true)
+      setDiscoverError(null)
+
+      console.log('🔍 Chargement des profils discover pour la home...')
+
+      const response = await fetch('/api/discover?limit=10', {
+        method: 'GET',
+        credentials: 'include',
+      })
+
+      if (!response.ok) {
+        throw new Error(`API Error: ${response.status}`)
+      }
+
+      const data: DiscoverApiResponse = await response.json()
+
+      console.log('📊 API Discover response:', data)
+
+      if (!data.success) {
+        throw new Error(data.error || 'API returned success: false')
+      }
+
+      if (!data.users || !Array.isArray(data.users)) {
+        throw new Error('Invalid users data from API')
+      }
+
+      // Transformation pour compatibilité avec l'UI existante
+      const transformedUsers: DiscoverUser[] = data.users.map(user => ({
+        id: user.id,
+        name: user.name,
+        age: user.age,
+        bio: user.bio,
+        location: user.location,
+        profession: user.profession,
+        interests: user.interests || [],
+        photos: user.photos || [],
+        compatibility: user.compatibility,
+        isOnline: user.isOnline || false,
+        memberSince: user.memberSince
+      }))
+
+      setDiscoveryUsers(transformedUsers)
+      setCurrentUserIndex(0)
+
+      console.log('✅ Profils discover chargés:', transformedUsers.length)
+
+    } catch (err: any) {
+      console.error('❌ Erreur chargement discover:', err)
+      setDiscoverError(err.message)
+      
+      // Fallback vers profils vides en cas d'erreur
+      setDiscoveryUsers([])
+    } finally {
+      setDiscoverLoading(false)
     }
-  ]
-
-  useEffect(() => {
-    setDiscoveryUsers(mockUsers)
-  }, [])
-
-  const handleLike = (userId: string) => {
-    console.log('Like user:', userId)
-    // Simuler un match parfois
-    if (Math.random() > 0.7) {
-      setTimeout(() => {
-        alert('🎉 C\'est un match ! Vous pouvez maintenant vous écrire.')
-        // Refresh des stats après un match
-        refreshStats()
-      }, 500)
-    }
-    nextUser()
   }
 
-  const handlePass = (userId: string) => {
-    console.log('Pass user:', userId)
-    nextUser()
+  // Chargement initial des profils
+  useEffect(() => {
+    if (session?.user) {
+      loadDiscoverProfiles()
+    }
+  }, [session])
+
+  // ================================
+  // ACTIONS DISCOVER (API)
+  // ================================
+
+  const handleLike = async (userId: string) => {
+    try {
+      console.log('💖 Like user via API:', userId)
+
+      // Appel API pour le like
+      const response = await fetch('/api/discover', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          targetUserId: userId,
+          action: 'like'
+        })
+      })
+
+      const result = await response.json()
+      console.log('📡 Like result:', result)
+
+      if (result.success) {
+        // Vérifier s'il y a un match
+        if (result.isMatch) {
+          console.log('🎉 MATCH détecté !')
+          setMatchUser({ id: userId, name: currentUser.name })
+          setIsMatch(true)
+          
+          // Refresh des stats après un match
+          refreshStats()
+        }
+
+        // Passer au profil suivant
+        nextUser()
+
+      } else {
+        console.error('❌ Erreur API like:', result.error)
+        alert('Erreur lors du like: ' + result.error)
+      }
+
+    } catch (error) {
+      console.error('❌ Erreur réseau like:', error)
+      alert('Erreur de connexion lors du like')
+    }
+  }
+
+  const handlePass = async (userId: string) => {
+    try {
+      console.log('👎 Pass user via API:', userId)
+
+      // Appel API pour le dislike
+      const response = await fetch('/api/discover', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          targetUserId: userId,
+          action: 'dislike'
+        })
+      })
+
+      const result = await response.json()
+      console.log('📡 Pass result:', result)
+
+      if (result.success) {
+        // Passer au profil suivant
+        nextUser()
+      } else {
+        console.error('❌ Erreur API pass:', result.error)
+        // Continuer même en cas d'erreur côté serveur
+        nextUser()
+      }
+
+    } catch (error) {
+      console.error('❌ Erreur réseau pass:', error)
+      // Continuer même en cas d'erreur réseau
+      nextUser()
+    }
+  }
+
+  const handleSuperLike = async (userId: string) => {
+    try {
+      console.log('⭐ Super Like user via API:', userId)
+
+      const response = await fetch('/api/discover', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          targetUserId: userId,
+          action: 'super_like'
+        })
+      })
+
+      const result = await response.json()
+      console.log('📡 Super Like result:', result)
+
+      if (result.success) {
+        if (result.isMatch) {
+          console.log('🎉 SUPER MATCH détecté !')
+          setMatchUser({ id: userId, name: currentUser.name })
+          setIsMatch(true)
+          refreshStats()
+        }
+        nextUser()
+      } else {
+        console.error('❌ Erreur API super like:', result.error)
+        alert('Erreur lors du super like: ' + result.error)
+      }
+
+    } catch (error) {
+      console.error('❌ Erreur réseau super like:', error)
+      alert('Erreur de connexion lors du super like')
+    }
   }
 
   const nextUser = () => {
     if (currentUserIndex < discoveryUsers.length - 1) {
       setCurrentUserIndex(currentUserIndex + 1)
     } else {
-      setCurrentUserIndex(0)
+      // Recharger de nouveaux profils quand on arrive à la fin
+      console.log('🔄 Fin des profils, rechargement...')
+      loadDiscoverProfiles()
     }
   }
 
-  const currentUser = discoveryUsers[currentUserIndex]
+  // ================================
+  // GESTION DE L'AVATAR/PHOTO
+  // ================================
+
+  const getUserAvatar = (user: DiscoverUser) => {
+    // Priorité : photo principale > première photo > placeholder
+    const primaryPhoto = user.photos?.find(photo => photo.isPrimary)
+    const firstPhoto = user.photos?.[0]
+    
+    if (primaryPhoto?.url) {
+      return primaryPhoto.url
+    } else if (firstPhoto?.url) {
+      return firstPhoto.url
+    } else {
+      // Fallback vers un emoji basé sur le genre ou aléatoire
+      const avatars = ['👩‍🦰', '👱‍♀️', '👩‍🦱', '👩', '🧑‍🦰', '👨‍🦱', '👨', '🧑']
+      const index = user.name.length % avatars.length
+      return avatars[index]
+    }
+  }
+
+  // Calculer la "distance" basée sur la compatibilité (simulation)
+  const getDistance = (compatibility: number) => {
+    // Plus la compatibilité est haute, plus la "distance" est courte
+    return Math.round((100 - compatibility) / 10 + 0.5)
+  }
 
   // 🎯 Actions rapides avec badges de notification
   const quickActions = [
@@ -249,11 +445,14 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* Colonne 2: Découverte (au centre) */}
-            <div className="xl:w-1/3 bg-white rounded-2xl p-4 border border-gray-200 shadow-sm flex flex-col">
+            {/* Colonne 2: Découverte API (au centre) - VERSION AGRANDIE */}
+            <div className="xl:w-1/3 bg-white rounded-2xl p-4 border border-gray-200 shadow-sm flex flex-col min-h-[500px]">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
                   🔥 Découverte
+                  {discoverLoading && (
+                    <div className="w-4 h-4 border-2 border-pink-500 border-t-transparent rounded-full animate-spin"></div>
+                  )}
                 </h2>
                 <Link 
                   href="/discover" 
@@ -263,96 +462,171 @@ export default function HomePage() {
                 </Link>
               </div>
 
-              {currentUser ? (
+              {/* État de chargement */}
+              {discoverLoading ? (
+                <div className="flex-1 flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="w-8 h-8 border-2 border-pink-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                    <p className="text-sm text-gray-500">Recherche de profils...</p>
+                  </div>
+                </div>
+              ) : discoverError ? (
+                <div className="flex-1 flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="text-2xl mb-2">😞</div>
+                    <p className="text-sm text-red-600 mb-2">Erreur de chargement</p>
+                    <button 
+                      onClick={loadDiscoverProfiles}
+                      className="text-xs bg-pink-500 text-white px-2 py-1 rounded hover:bg-pink-600"
+                    >
+                      Réessayer
+                    </button>
+                  </div>
+                </div>
+              ) : currentUser ? (
                 <div className="flex-1 min-h-0">
-                  <div className="bg-gradient-to-br from-pink-500 to-purple-600 rounded-xl p-4 text-white relative overflow-hidden h-full flex flex-col">
-                    {/* Décorations */}
-                    <div className="absolute top-2 right-2 text-lg opacity-20">✨</div>
-                    <div className="absolute bottom-2 left-2 text-sm opacity-20">💫</div>
+                  {/* CARTE PROFIL AGRANDIE AVEC PHOTO DE FOND */}
+                  <div 
+                    className="rounded-xl relative overflow-hidden h-full flex flex-col shadow-xl"
+                    style={{
+                      backgroundImage: currentUser.photos?.length > 0 
+                        ? `url(${getUserAvatar(currentUser)})` 
+                        : 'linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%)',
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center',
+                      minHeight: '400px'
+                    }}
+                  >
+                    {/* Overlay gradient pour lisibilité */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-black/40"></div>
                     
-                    <div className="relative z-10 flex-1 flex flex-col min-h-0">
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center text-2xl backdrop-blur-sm">
-                          {currentUser.avatar}
+                    {/* Badges en haut */}
+                    <div className="relative z-10 p-4 flex justify-between items-start">
+                      {currentUser.isOnline && (
+                        <div className="bg-green-500 text-white px-3 py-1 rounded-full text-xs font-semibold flex items-center">
+                          <div className="w-2 h-2 bg-white rounded-full mr-2 animate-pulse"></div>
+                          En ligne
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <h3 className="text-lg font-bold mb-1 truncate">
-                            {currentUser.name}, {currentUser.age}
-                          </h3>
-                          <div className="text-pink-100 flex items-center gap-1 text-xs">
-                            📍 À {currentUser.distance} km
-                            {currentUser.isOnline && (
-                              <span className="ml-1 flex items-center gap-1 bg-green-500/30 px-1.5 py-0.5 rounded-full text-xs">
-                                <div className="w-1 h-1 bg-green-400 rounded-full animate-pulse"></div>
-                                En ligne
-                              </span>
-                            )}
+                      )}
+                      <div className="bg-pink-500/90 backdrop-blur-sm text-white px-3 py-1 rounded-full text-sm font-semibold">
+                        ✨ {currentUser.compatibility}% compatible
+                      </div>
+                    </div>
+
+                    {/* Contenu principal en bas */}
+                    <div className="relative z-10 mt-auto p-4 text-white">
+                      {/* Nom et âge */}
+                      <div className="mb-3">
+                        <h3 className="text-2xl font-bold mb-1">
+                          {currentUser.name}, {currentUser.age}
+                        </h3>
+                        <div className="flex items-center gap-4 text-white/90 text-sm">
+                          <span className="flex items-center gap-1">
+                            📍 {currentUser.location}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            📏 {getDistance(currentUser.compatibility)} km
+                          </span>
+                        </div>
+                        {currentUser.profession && (
+                          <div className="text-white/80 text-sm mt-1">
+                            💼 {currentUser.profession}
                           </div>
-                        </div>
+                        )}
                       </div>
 
-                      <div className="mb-4 flex-1 min-h-0">
-                        <h4 className="text-xs font-semibold mb-2">Centres d&apos;intérêt</h4>
-                        <div className="flex flex-wrap gap-1.5 overflow-hidden">
+                      {/* Bio si disponible */}
+                      {currentUser.bio && (
+                        <div className="mb-3">
+                          <p className="text-white/90 text-sm line-clamp-2">
+                            {currentUser.bio}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Centres d'intérêt */}
+                      <div className="mb-4">
+                        <h4 className="text-sm font-semibold mb-2 text-white/95">Centres d&apos;intérêt</h4>
+                        <div className="flex flex-wrap gap-2">
                           {currentUser.interests.slice(0, 4).map((interest, index) => (
                             <span 
                               key={index}
-                              className="px-2 py-1 bg-white/20 rounded-full text-xs backdrop-blur-sm font-medium"
+                              className="px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full text-xs font-medium"
                             >
                               {interest}
                             </span>
                           ))}
                           {currentUser.interests.length > 4 && (
-                            <span className="px-2 py-1 bg-white/10 rounded-full text-xs backdrop-blur-sm font-medium">
+                            <span className="px-3 py-1 bg-white/10 backdrop-blur-sm rounded-full text-xs font-medium">
                               +{currentUser.interests.length - 4}
                             </span>
                           )}
                         </div>
                       </div>
 
-                      {/* Actions de swipe */}
-                      <div className="flex justify-center gap-3 mb-2 mt-auto">
+                      {/* Actions de swipe AGRANDIES */}
+                      <div className="flex justify-center gap-4 mb-3">
                         <button 
                           onClick={() => handlePass(currentUser.id)}
-                          className="w-10 h-10 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center backdrop-blur-sm transition-all duration-200 hover:scale-110"
+                          className="w-14 h-14 bg-white/15 hover:bg-white/25 rounded-full flex items-center justify-center backdrop-blur-sm transition-all duration-200 hover:scale-110 border border-white/20"
                           title="Passer"
                           type="button"
                         >
-                          <span className="text-sm">👎</span>
+                          <span className="text-xl">👎</span>
+                        </button>
+                        
+                        <button 
+                          onClick={() => handleSuperLike(currentUser.id)}
+                          className="w-14 h-14 bg-blue-500/90 hover:bg-blue-600 rounded-full flex items-center justify-center backdrop-blur-sm transition-all duration-200 hover:scale-110 shadow-lg border border-white/30"
+                          title="Super Like"
+                          type="button"
+                        >
+                          <span className="text-xl">⭐</span>
                         </button>
                         
                         <button 
                           onClick={() => handleLike(currentUser.id)}
-                          className="w-12 h-12 bg-pink-500 hover:bg-pink-600 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110 shadow-lg border border-white/30"
+                          className="w-16 h-16 bg-pink-500 hover:bg-pink-600 rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110 shadow-xl border-2 border-white/40"
                           title="Liker"
                           type="button"
                         >
-                          <span className="text-lg">💖</span>
-                        </button>
-                        
-                        <button 
-                          className="w-10 h-10 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center backdrop-blur-sm transition-all duration-200 hover:scale-110"
-                          title="Super Like"
-                          type="button"
-                        >
-                          <span className="text-sm">⭐</span>
+                          <span className="text-2xl">💖</span>
                         </button>
                       </div>
 
                       {/* Indicateur de progression */}
                       <div className="flex justify-center">
-                        <div className="flex gap-1">
-                          {discoveryUsers.map((_, index) => (
+                        <div className="flex gap-1.5">
+                          {discoveryUsers.slice(0, 8).map((_, index) => (
                             <div 
                               key={index}
-                              className={`w-1 h-1 rounded-full transition-all ${
-                                index === currentUserIndex ? 'bg-white' : 'bg-white/30'
+                              className={`w-2 h-2 rounded-full transition-all ${
+                                index === currentUserIndex ? 'bg-white scale-110' : 'bg-white/40'
                               }`}
                             />
                           ))}
+                          {discoveryUsers.length > 8 && (
+                            <span className="text-xs text-white/70 ml-2 self-center">
+                              +{discoveryUsers.length - 8}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
+
+                    {/* Indicateur de multiple photos */}
+                    {currentUser.photos && currentUser.photos.length > 1 && (
+                      <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-10">
+                        <div className="flex gap-1">
+                          {currentUser.photos.slice(0, 5).map((_, index) => (
+                            <div key={index} className="w-8 h-1 bg-white/40 rounded-full"></div>
+                          ))}
+                          {currentUser.photos.length > 5 && (
+                            <div className="w-8 h-1 bg-white/20 rounded-full"></div>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               ) : (
@@ -362,7 +636,7 @@ export default function HomePage() {
                     Plus de profils !
                   </h3>
                   <div className="text-gray-600 text-xs mb-3">
-                    Revenez demain pour découvrir de nouveaux profils
+                    Aucun nouveau profil disponible pour le moment
                   </div>
                   <Link 
                     href="/discover" 
@@ -480,6 +754,40 @@ export default function HomePage() {
           </div>
         </div>
       </div>
+
+      {/* Modal de Match */}
+      {isMatch && matchUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75">
+          <div className="bg-white rounded-2xl p-8 mx-4 text-center max-w-md">
+            <div className="text-6xl mb-4">🎉</div>
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">C'est un Match !</h2>
+            <p className="text-gray-600 mb-6">
+              Vous et <span className="font-semibold text-pink-600">{matchUser.name}</span> vous plaisez mutuellement !
+            </p>
+            <div className="space-y-3">
+              <button
+                onClick={() => {
+                  setIsMatch(false)
+                  setMatchUser(null)
+                }}
+                className="w-full bg-pink-500 text-white px-8 py-3 rounded-full font-semibold hover:bg-pink-600 transition-all"
+              >
+                Continuer à découvrir
+              </button>
+              <button
+                onClick={() => {
+                  router.push('/messages')
+                  setIsMatch(false)
+                  setMatchUser(null)
+                }}
+                className="w-full bg-white border-2 border-gray-200 text-gray-700 px-8 py-3 rounded-full font-semibold hover:bg-gray-50 transition-all"
+              >
+                Envoyer un message
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AuthGuard>
   )
 }

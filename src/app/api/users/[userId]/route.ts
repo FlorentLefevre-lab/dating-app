@@ -1,23 +1,23 @@
-// src/app/api/users/[userId]/route.ts - API pour récupérer un utilisateur spécifique
-import { auth } from '../../../../auth'
+// src/app/api/users/[userId]/route.ts - VERSION CORRIGÉE COMPLÈTE
+
+import { auth } from '../../../../auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { userId: string } }
+  { params }: { params: Promise<{ userId: string }> }
 ) {
-  console.log('🔍 API Users - Récupération utilisateur:', params.userId);
-  
   try {
-    const session = await auth()
-    
+    const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });
     }
 
-    const { userId } = params;
-    
+    // Await params avant utilisation
+    const { userId } = await params;
+    console.log('🔍 API Users - Récupération utilisateur:', userId);
+
     if (!userId) {
       return NextResponse.json({ error: 'ID utilisateur requis' }, { status: 400 });
     }
@@ -27,7 +27,7 @@ export async function GET(
       where: {
         OR: [
           { id: userId },
-          { email: userId } // Au cas où on passe un email au lieu d'un ID
+          { email: userId }
         ]
       },
       select: {
@@ -53,16 +53,13 @@ export async function GET(
 
     if (!user) {
       console.log('❌ Utilisateur non trouvé:', userId);
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: 'Utilisateur non trouvé',
-        userId: userId 
+        userId: userId
       }, { status: 404 });
     }
 
     console.log('✅ Utilisateur trouvé:', user.id, user.name);
-
-    // Vérifier si on peut voir cet utilisateur (privacy settings)
-    // Ici vous pourriez ajouter des règles de confidentialité
 
     // Formater les photos
     const formattedUser = {

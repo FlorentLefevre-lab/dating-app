@@ -162,6 +162,7 @@ export default function Navbar() {
                 pathname === '/messages' ? 'text-pink-600 font-semibold' : ''
               }`}
             >
+              
               Messages
               <span className="absolute -top-2 -right-2 bg-pink-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
                 3

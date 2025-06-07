@@ -1,7 +1,7 @@
 // src/app/api/matches/route.ts - API pour récupérer les matchs
 import { auth } from '../../../auth'
-const session = await auth()
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '../../../lib/prisma' // Ajustez le chemin selon votre structure
 
 // Interfaces pour les matchs
 interface MatchUser {
@@ -61,9 +61,10 @@ export async function GET(request: NextRequest): Promise<NextResponse<MatchesRes
   console.log('💕 API Matches - Récupération des likes réciproques');
   
   try {
-    const session = await getServerSession(authOptions);
+    // ✅ CORRECTION: auth() appelé dans le handler, pas au niveau du module
+    const session = await auth();
     
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       return NextResponse.json({ 
         success: false,
         error: 'Non authentifié',
@@ -82,11 +83,9 @@ export async function GET(request: NextRequest): Promise<NextResponse<MatchesRes
       }, { status: 401 });
     }
 
-    const { prisma } = await import('@/lib/db');
-    
-    // Récupérer l'utilisateur actuel par email
+    // Récupérer l'utilisateur actuel directement par ID (plus efficace)
     const currentUser = await prisma.user.findUnique({
-      where: { email: session.user.email },
+      where: { id: session.user.id },
       select: { 
         id: true, 
         interests: true 

@@ -25,6 +25,7 @@
     "@heroicons/react": "^2.2.0",
     "@hookform/resolvers": "^5.0.1",
     "@prisma/client": "^6.9.0",
+    "@stream-io/video-react-sdk": "^1.18.4",
     "bcryptjs": "^3.0.2",
     "cloudinary": "^2.6.1",
     "date-fns": "^4.1.0",
@@ -38,6 +39,8 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-hook-form": "^7.56.4",
+    "stream-chat": "^9.5.1",
+    "stream-chat-react": "^13.0.5",
     "yarn": "^1.22.22",
     "zod": "^3.25.42"
   },

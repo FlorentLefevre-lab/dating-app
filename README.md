@@ -37,7 +37,7 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 
 dotenv -e .env.local -- npx prisma studio
 
-quentin.gerard1@test.com
+grayson.wilson4@example.com
 zoe.lee0@example.com
 
 # GUIDE COMPLET DES COMMANDES PRISMA

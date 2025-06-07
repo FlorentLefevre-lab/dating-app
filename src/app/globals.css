@@ -1,6 +1,73 @@
+@import 'stream-chat-react/dist/css/v2/index.css';
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Personnalisation pour site de rencontre */
+.str-chat {
+  --str-chat__primary-color: #ec4899;
+  /* Rose */
+  --str-chat__active-primary-color: #be185d;
+  /* Rose foncé */
+  --str-chat__surface-color: #fdf2f8;
+  /* Rose très clair */
+  --str-chat__secondary-surface-color: #fce7f3;
+  /* Rose clair */
+  --str-chat__border-radius-circle: 20px;
+  --str-chat__border-radius-md: 12px;
+}
+
+
+/* Messages */
+.str-chat__message-simple__content {
+  border-radius: 18px !important;
+  max-width: 280px;
+}
+
+.str-chat__message-simple__content--user {
+  background: linear-gradient(135deg, #ec4899, #be185d) !important;
+  color: white !important;
+}
+
+.str-chat__message-simple__content--other {
+  background: #f3f4f6 !important;
+  color: #1f2937 !important;
+}
+
+/* Input de message */
+.str-chat__message-input {
+  border-radius: 25px !important;
+  background: #fdf2f8 !important;
+  border: 2px solid #f9a8d4 !important;
+}
+
+.str-chat__message-input:focus-within {
+  border-color: #ec4899 !important;
+  box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.1) !important;
+}
+
+/* Bouton d'envoi */
+.str-chat__send-button {
+  background: linear-gradient(135deg, #ec4899, #be185d) !important;
+  border-radius: 50% !important;
+  width: 40px !important;
+  height: 40px !important;
+}
+
+/* Styles pour les appels vidéo */
+.str-video__call-controls {
+  background: rgba(0, 0, 0, 0.8) !important;
+  border-radius: 15px !important;
+  padding: 10px !important;
+}
+
+.str-video__call-controls button {
+  border-radius: 50% !important;
+  width: 50px !important;
+  height: 50px !important;
+  margin: 0 5px !important;
+}
+
 
 /* Styles de base améliorés */
 body {
