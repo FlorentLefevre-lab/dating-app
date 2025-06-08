@@ -1,12 +1,12 @@
 // src/app/api/likes/route.ts
-import { NextResponse, NextRequest } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-import { prisma } from '@/lib/prisma';
+import { auth } from '../../../auth'
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '../../../lib/prisma' // Ajustez le chemin
 
 export async function POST(request: NextRequest) {
   try {
     // Récupérer la session
-    const session = await getServerSession();
+    const session = await auth();
     
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });

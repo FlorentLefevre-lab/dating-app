@@ -1,7 +1,7 @@
 // src/app/api/matches/route.ts - API pour récupérer les matchs
 import { auth } from '../../../auth'
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '../../../lib/prisma' // Ajustez le chemin selon votre structure
+import { prisma } from '../../../lib/prisma' // Ajustez le chemin
 
 // Interfaces pour les matchs
 interface MatchUser {

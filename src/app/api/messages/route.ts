@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '../../../auth'
-const session = await auth()
 import { prisma } from '../../../lib/prisma';
 import type { SendMessageRequest, PrismaMessage } from '../../../types/chat';
 
 export async function POST(request: NextRequest) {
-  const session = await getServerSession(authOptions);
+  const session = await auth();
   
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });

@@ -1,7 +1,6 @@
 // app/api/user-profile/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '../../../auth'
-const session = await auth()
 import { PrismaClient } from '@prisma/client';
 
 // Singleton pour Prisma (évite les multiples connexions)
@@ -16,7 +15,7 @@ if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
 // GET - Récupérer le profil complet de l'utilisateur
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await auth()
     
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });
@@ -70,7 +69,7 @@ export async function GET(request: NextRequest) {
 // PUT - Mettre à jour le profil utilisateur
 export async function PUT(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await auth()
     
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });

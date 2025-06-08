@@ -4,7 +4,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useAuth } from '@/hooks/useAuth'; // Votre hook existant
+import { useAuth } from '@/hooks/useAuth';
 import { useStream } from '@/hooks/useStream';
 import ChatComponent from './ChatComponent';
 import VideoCallComponent from './VideoCallComponent';
@@ -19,7 +19,7 @@ import type {
 } from '@/types/stream';
 
 const DatingApp: React.FC = () => {
-  const { user: currentUser, isLoading: authLoading } = useAuth(); // Votre hook existant
+  const { user: currentUser, isLoading: authLoading } = useAuth();
   const searchParams = useSearchParams();
   const [matchedUser, setMatchedUser] = useState<StreamUser | null>(null);
   const [loading, setLoading] = useState(true);

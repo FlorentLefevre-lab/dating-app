@@ -1,12 +1,11 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { auth } from '../../../auth'
-const session = await auth()
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const session = await getServerSession(req, res, authOptions);
+  const session = await auth();
   
   if (!session?.user?.email) {
     return res.status(401).json({ error: 'Non authentifié' });

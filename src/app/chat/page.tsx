@@ -3,7 +3,7 @@
 'use client';
 
 import { Suspense } from 'react';
-import AuthGuard  from '@/components/auth/AuthGuard'; // Votre composant existant
+import AuthGuard  from '@/components/auth/AuthGuard';
 import DatingApp from '@/components/DatingApp';
 
 function ChatPageContent() {

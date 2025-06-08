@@ -1,13 +1,12 @@
 // src/app/api/users/list/route.ts - API pour lister tous les utilisateurs
 import { auth } from '../../../../auth'
-const session = await auth()
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {
   console.log('👥 API Liste des utilisateurs');
   
   try {
-    const session = await getServerSession(authOptions);
+    const session = await auth()
     
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });
@@ -123,7 +122,7 @@ export async function POST(request: NextRequest) {
   console.log('🔍 API Recherche utilisateurs avancée');
   
   try {
-    const session = await getServerSession(authOptions);
+    const session = await auth()
     
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });

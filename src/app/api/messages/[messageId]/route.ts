@@ -1,13 +1,13 @@
-import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '../../../../auth'
-const session = await auth()
-import { prisma } from '../../../../lib/prisma';
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '../../../../lib/prisma' // Ajustez le chemin
+
 
 export async function PATCH(
   request: NextRequest,
   { params }: { params: { messageId: string } }
 ) {
-  const session = await getServerSession(authOptions);
+  const session = await auth();
   
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
@@ -48,7 +48,7 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: { messageId: string } }
 ) {
-  const session = await getServerSession(authOptions);
+  const session = await auth();
   
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });

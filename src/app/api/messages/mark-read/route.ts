@@ -1,7 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '../../../../auth'
-const session = await auth()
-import { prisma } from '../../../../lib/prisma';
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from './../../../../lib/prisma' // Ajustez le chemin
 
 interface MarkReadBody {
   conversationWith: string;
@@ -9,7 +8,7 @@ interface MarkReadBody {
 }
 
 export async function POST(request: NextRequest) {
-  const session = await getServerSession(authOptions);
+  const session = await auth();
   
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
