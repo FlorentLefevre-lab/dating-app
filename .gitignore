@@ -30,13 +30,245 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# ==========================================
+# 🔐 SÉCURITÉ - Variables d'environnement
+# ==========================================
+# Tous les fichiers d'environnement (CRITIQUE pour site de rencontre)
 .env*
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.staging
+.env.docker
+.env.backup
+.env.copy
 
+# Variantes courantes d'environnement
+*.env
+*.env.*
+env.json
+config.json
+
+# ==========================================
+# 🔑 CLÉS ET CERTIFICATS
+# ==========================================
+# Clés privées et certificats
+*.key
+*.pem
+*.p12
+*.pfx
+*.p8
+*.cer
+*.crt
+*.der
+
+# Clés SSH
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+*.ppk
+
+# Clés Firebase
+*firebase-adminsdk*.json
+*service-account*.json
+google-services.json
+GoogleService-Info.plist
+
+# ==========================================
+# 📦 SECRETS ET CONFIGURATIONS
+# ==========================================
+# Dossiers de secrets
+secrets/
+private/
+credentials/
+keys/
+certs/
+
+# Fichiers de configuration avec potentiels secrets
+config/database.yml
+config/secrets.yml
+config/master.key
+.secret
+.secrets
+
+# ==========================================
+# 🗄️ DONNÉES SENSIBLES
+# ==========================================
+# Backups de base de données (peuvent contenir données utilisateurs)
+backups/
+*.sql
+*.dump
+*.bak
+*.backup
+*.db
+*.sqlite
+*.sqlite3
+
+# Uploads et médias utilisateurs (en local)
+uploads/
+storage/
+public/uploads/
+temp-uploads/
+user-photos/
+
+# Logs (peuvent contenir des tokens/données sensibles)
+logs/
+*.log
+log/
+*.access.log
+*.error.log
+
+# ==========================================
+# 🐳 DOCKER SENSIBLE
+# ==========================================
+# Override files avec potentiels secrets
+docker-compose.override.yml
+docker-compose.secrets.yml
+docker-compose.local.yml
+docker-compose.production.local.yml
+
+# Variables Docker
+.dockerenv
+
+# ==========================================
+# 📱 DÉVELOPPEMENT MOBILE (si applicable)
+# ==========================================
+# iOS
+*.mobileprovision
+*.p12
+ios/Runner/GoogleService-Info.plist
+
+# Android
+android/app/google-services.json
+android/key.properties
+*.keystore
+*.jks
+
+# ==========================================
+# 🔧 CI/CD ET DÉPLOIEMENT
+# ==========================================
+# Fichiers de déploiement locaux
+.deployment
+deploy_key
+deploy_key.pub
+.ssh/
+
+# GitHub Actions secrets (locals)
+.github/secrets/
+.github/workflows/*.local.yml
+
+# Terraform (si utilisé)
+*.tfvars
+*.tfstate
+*.tfstate.backup
+.terraform/
+
+# ==========================================
+# 💻 IDE ET OUTILS
+# ==========================================
+# VSCode settings avec potentiels chemins sensibles
+.vscode/settings.json
+.vscode/launch.json
+
+# JetBrains avec configurations sensibles
+.idea/workspace.xml
+.idea/dataSources.local.xml
+.idea/dataSources/
+.idea/dynamic.xml
+
+# ==========================================
+# 🌐 PLATEFORMES CLOUD
+# ==========================================
 # vercel
 .vercel
 
+# Netlify
+.netlify
+
+# Railway
+.railway
+
+# ==========================================
+# 📊 MONITORING ET ANALYTICS
+# ==========================================
+# Logs de performance
+newrelic.ini
+.newrelic.yml
+
+# Sentry
+.sentryclirc
+
+# ==========================================
+# 🧪 TESTS ET DÉVELOPPEMENT
+# ==========================================
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-.env.local
+
+# Tests avec données sensibles
+test-data/
+fixtures/real-data/
+*.test.env
+
+# Storybook avec configs sensibles
+.storybook/local.js
+
+# ==========================================
+# 📦 PACKAGE MANAGERS
+# ==========================================
+# npm
+.npm
+.npmrc
+
+# yarn
+.yarn/install-state.gz
+.yarn/cache
+.yarnrc.yml
+
+# pnpm
+.pnpm-store/
+.pnpmfile.cjs
+
+# ==========================================
+# 🔍 OUTILS DE DÉVELOPPEMENT
+# ==========================================
+# Prisma Studio
+prisma/dev.db
+prisma/dev.db-journal
+
+# Database URLs de développement
+dev.sqlite
+development.sqlite3
+
+# Temporary files
+temp/
+tmp/
+.temp/
+.tmp/
+
+# OS generated files
+Thumbs.db
+ehthumbs.db
+.Spotlight-V100
+.Trashes
+
+# ==========================================
+# ✅ FICHIERS À GARDER (commentés pour info)
+# ==========================================
+# Ces fichiers DOIVENT être committés :
+# .env.template (template pour l'équipe)
+# .env.example (exemple de configuration)
+# docker-compose.yml (configuration de base)
+# prisma/schema.prisma (schéma de base)
+
+# ==========================================
+# 🚨 RAPPEL SÉCURITÉ
+# ==========================================
+# Pour un site de rencontre, JAMAIS committer :
+# - Clés OAuth (Google, Facebook)
+# - Secrets de session (NextAuth)
+# - Clés API (Cloudinary, Stream.io)
+# - Données utilisateurs réelles
+# - Backups de production
