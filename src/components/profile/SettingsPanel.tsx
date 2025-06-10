@@ -1,5 +1,5 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { signOut } from 'next-auth/react';
 import { 
@@ -7,7 +7,6 @@ import {
   ShieldCheckIcon,
   UserCircleIcon,
   BellIcon,
-  EyeIcon,
   LockClosedIcon,
   PauseIcon,
   XMarkIcon,
@@ -25,16 +24,103 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
 }) => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showSuspendModal, setShowSuspendModal] = useState(false);
+  const [showReactivateModal, setShowReactivateModal] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState('');
   const [suspendReason, setSuspendReason] = useState('');
   const [loading, setLoading] = useState(false);
   const [isSuspending, setIsSuspending] = useState(false);
+  
+  // États pour les paramètres de notification
+  const [notificationSettings, setNotificationSettings] = useState({
+    messageNotifications: true,
+    likeNotifications: true,
+    matchNotifications: true
+  });
 
-  // ✅ Vérifier si le compte est suspendu
-  const isAccountSuspended = profile?.accountStatus === 'SUSPENDED';
+  // Logique de statut robuste
+  const accountStatus = (() => {
+    if (!profile) {
+      return 'UNKNOWN';
+    }
 
-  // ✅ Utilisation du hook pour la réactivation seulement
+    const rawStatus = profile.accountStatus;
+
+    if (rawStatus !== null && rawStatus !== undefined && rawStatus !== '') {
+      const status = String(rawStatus).trim().toUpperCase();
+      const validStatuses = ['ACTIVE', 'SUSPENDED', 'BANNED', 'DELETED', 'PENDING_VERIFICATION'];
+      if (validStatuses.includes(status)) {
+        return status;
+      } else {
+        return 'ACTIVE';
+      }
+    }
+
+    if (profile.id && profile.email) {
+      return 'ACTIVE';
+    }
+
+    return 'UNKNOWN';
+  })();
+
+  const isAccountSuspended = accountStatus === 'SUSPENDED' || accountStatus === 'BANNED';
+  const isAccountActive = accountStatus === 'ACTIVE';
+  
   const { reactivateAccount, isLoading: hookIsLoading } = useAccountSuspension();
+
+  // Réinitialisation de l'état de suspension
+  useEffect(() => {
+    if (profile?.id) {
+      setIsSuspending(false);
+    }
+  }, [profile?.id, accountStatus]);
+
+  // Charger les paramètres de notification
+  useEffect(() => {
+    const loadNotificationSettings = async () => {
+      try {
+        const response = await fetch('/api/user/notification-settings');
+        if (response.ok) {
+          const settings = await response.json();
+          setNotificationSettings(prev => ({
+            ...prev,
+            ...settings
+          }));
+        }
+      } catch (error) {
+        console.error('Erreur chargement paramètres notifications:', error);
+      }
+    };
+
+    if (profile?.id) {
+      loadNotificationSettings();
+    }
+  }, [profile?.id]);
+
+  // Sauvegarder les paramètres de notification
+  const updateNotificationSettings = async (newSettings: Partial<typeof notificationSettings>) => {
+    try {
+      const updatedSettings = { ...notificationSettings, ...newSettings };
+      setNotificationSettings(updatedSettings);
+
+      const response = await fetch('/api/user/notification-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedSettings)
+      });
+
+      if (!response.ok) {
+        throw new Error('Erreur sauvegarde paramètres');
+      }
+
+      onMessage('Paramètres mis à jour avec succès', 'success');
+    } catch (error) {
+      console.error('Erreur mise à jour paramètres:', error);
+      onMessage('Erreur lors de la mise à jour des paramètres', 'error');
+      setNotificationSettings(prev => ({ ...prev, ...Object.fromEntries(
+        Object.entries(newSettings).map(([key, value]) => [key, !value])
+      )}));
+    }
+  };
 
   const suspendReasons = [
     { value: 'break', label: 'Pause temporaire' },
@@ -45,19 +131,14 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
     { value: 'other', label: 'Autre raison' }
   ];
 
-  // 🔧 FONCTION DE NETTOYAGE COMPLÈTE DES COOKIES ET STORAGE
+  // Fonction de nettoyage complète
   const clearAllUserData = async () => {
     try {
-      console.log('🧹 Nettoyage complet des données utilisateur...');
-      
-      // 1. Nettoyer le localStorage
       if (typeof window !== 'undefined') {
         localStorage.clear();
         sessionStorage.clear();
-        console.log('✅ Storage nettoyé');
       }
       
-      // 2. Supprimer manuellement tous les cookies
       if (typeof document !== 'undefined') {
         const cookies = document.cookie.split(";");
         
@@ -65,51 +146,47 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
           const eqPos = cookie.indexOf("=");
           const name = eqPos > -1 ? cookie.substr(0, eqPos).trim() : cookie.trim();
           
-          // Supprimer le cookie sur différents domaines et paths
           document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;`;
           document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=${window.location.hostname};`;
           document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=.${window.location.hostname};`;
         }
-        console.log('✅ Cookies nettoyés');
       }
       
-      // 3. Déconnexion NextAuth
       await signOut({ 
-        redirect: false, // Empêcher la redirection automatique
-        callbackUrl: '/' // URL de callback après déconnexion
+        redirect: false,
+        callbackUrl: '/'
       });
-      console.log('✅ Session NextAuth fermée');
       
     } catch (error) {
-      console.error('❌ Erreur lors du nettoyage:', error);
+      console.error('Erreur lors du nettoyage:', error);
     }
   };
 
-  // 🔧 FONCTION DE SUSPENSION SIMPLIFIÉE AVEC APPEL DIRECT À L'API
+  // Fonction de suspension avec vérifications
   const handleSuspendAccount = async () => {
-    // Empêcher les clics multiples
     if (isSuspending) {
-      console.log('⚠️ Suspension déjà en cours, ignoré');
+      return;
+    }
+    
+    if (!profile?.id) {
+      onMessage('Erreur: Profil non trouvé. Veuillez actualiser la page.', 'error');
+      return;
+    }
+    
+    if (accountStatus !== 'ACTIVE') {
+      onMessage(`Erreur: Compte avec statut ${accountStatus}. Seuls les comptes actifs peuvent être suspendus.`, 'error');
       return;
     }
 
-    // Sauvegarder la raison avant de modifier l'état
     const currentReason = suspendReason;
-    
     setIsSuspending(true);
     
     try {
-      console.log('🔄 Début suspension avec déconnexion automatique:', { reason: currentReason });
-      
-      // Fermer la modale immédiatement pour éviter les interactions
       setShowSuspendModal(false);
       setSuspendReason('');
       
-      // Afficher un message de début de suspension
       onMessage('Suspension du compte en cours...', 'info');
       
-      // 1. Appel direct à l'API de suspension (sans passer par le hook)
-      console.log('📡 Appel direct API suspension...');
       const response = await fetch('/api/user/suspend-account', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -117,15 +194,12 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
       });
 
       const result = await response.json();
-      console.log('📤 Réponse API suspension:', result);
 
       if (!response.ok) {
-        // Gérer le cas où le compte est déjà suspendu
         if (response.status === 400 && result.suggestion === 'reactivate') {
           throw new Error(`${result.message} Utilisez le bouton "Réactiver" à la place.`);
         }
         
-        // Gérer d'autres cas d'erreur
         if (response.status === 401) {
           throw new Error('Session expirée. Veuillez vous reconnecter.');
         }
@@ -136,59 +210,47 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
         
         throw new Error(result.message || result.error || 'Erreur lors de la suspension');
       }
-
-      console.log('✅ Suspension API réussie, début de la déconnexion...');
       
-      // 2. Afficher un message de succès
       onMessage('Compte suspendu avec succès. Déconnexion en cours...', 'success');
       
-      // 3. Attendre un petit délai pour que l'utilisateur puisse voir le message
       await new Promise(resolve => setTimeout(resolve, 1500));
       
-      // 4. Nettoyer toutes les données utilisateur et déconnecter
       await clearAllUserData();
       
-      // 5. Redirection forcée vers la racine
-      console.log('🔄 Redirection vers la racine...');
       window.location.href = '/';
       
     } catch (error) {
-      console.error('❌ Erreur suspension:', error);
-      
-      // Remettre l'état en cas d'erreur
       setIsSuspending(false);
       setShowSuspendModal(true);
-      setSuspendReason(currentReason); // Restaurer la raison sauvegardée
+      setSuspendReason(currentReason);
       
       onMessage(
         error instanceof Error ? error.message : 'Erreur lors de la suspension du compte', 
         'error'
       );
     }
-    // Note: Pas de finally car la page sera rechargée en cas de succès
   };
 
-  // ✅ FONCTION DE RÉACTIVATION (utilise le hook)
+  // Fonction de réactivation
   const handleReactivateAccount = async () => {
     try {
-      console.log('🔄 Début réactivation avec hook');
+      setShowReactivateModal(false);
       
       await reactivateAccount();
       
       onMessage('Votre compte a été réactivé avec succès ! Actualisation...', 'success');
       
-      // Recharger la page pour mettre à jour le statut
       setTimeout(() => {
         window.location.reload();
       }, 1500);
       
     } catch (error) {
-      console.error('❌ Erreur réactivation via hook:', error);
+      console.error('Erreur réactivation:', error);
       onMessage(error instanceof Error ? error.message : 'Erreur lors de la réactivation du compte', 'error');
     }
   };
 
-  // 🔧 FONCTION DE SUPPRESSION AMÉLIORÉE AVEC DÉCONNEXION SIMILAIRE
+  // Fonction de suppression
   const handleDeleteAccount = async () => {
     if (deleteConfirmation !== 'SUPPRIMER') {
       onMessage('Veuillez taper "SUPPRIMER" pour confirmer', 'error');
@@ -211,7 +273,6 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
         return;
       }
       
-      // Fermer la modale immédiatement
       setShowDeleteModal(false);
       setDeleteConfirmation('');
       
@@ -227,10 +288,9 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
       if (response.ok) {
         onMessage('Compte supprimé avec succès. Déconnexion...', 'success');
         
-        // Attendre un délai puis déconnecter
         setTimeout(async () => {
           await clearAllUserData();
-          window.location.href = '/'; // Redirection forcée
+          window.location.href = '/';
         }, 2000);
       } else {
         throw new Error('Erreur lors de la suppression');
@@ -238,24 +298,44 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
     } catch (error) {
       onMessage('Erreur lors de la suppression du compte', 'error');
       setLoading(false);
-      // Rouvrir la modale en cas d'erreur
       setShowDeleteModal(true);
     }
   };
 
   return (
     <div className="p-6">
-      {/* ✅ BANNIÈRE - Alerte si compte suspendu */}
+      {/* Bannière d'alerte si compte suspendu ou banni */}
       {isAccountSuspended && (
-        <div className="bg-orange-100 border-l-4 border-orange-500 p-4 rounded-r-lg mb-6">
+        <div className={`border-l-4 p-4 rounded-r-lg mb-6 ${
+          profile?.accountStatus === 'BANNED' 
+            ? 'bg-red-100 border-red-500' 
+            : 'bg-orange-100 border-orange-500'
+        }`}>
           <div className="flex items-center">
             <div className="flex-shrink-0">
-              <ExclamationTriangleIcon className="h-5 w-5 text-orange-500" />
+              <ExclamationTriangleIcon className={`h-5 w-5 ${
+                profile?.accountStatus === 'BANNED' ? 'text-red-500' : 'text-orange-500'
+              }`} />
             </div>
             <div className="ml-3">
-              <p className="text-sm text-orange-700">
-                <strong>Votre compte est suspendu.</strong> Votre profil n'est pas visible et vous ne recevez plus de notifications. 
-                Vous pouvez le réactiver ci-dessous dans la zone de danger.
+              <p className={`text-sm ${
+                profile?.accountStatus === 'BANNED' ? 'text-red-700' : 'text-orange-700'
+              }`}>
+                <strong>
+                  {profile?.accountStatus === 'BANNED' 
+                    ? 'Votre compte est banni.' 
+                    : 'Votre compte est suspendu.'
+                  }
+                </strong> 
+                {profile?.accountStatus === 'BANNED'
+                  ? ' Votre accès à la plateforme a été restreint. Contactez le support pour plus d\'informations.'
+                  : ' Votre profil n\'est pas visible et vous ne recevez plus de notifications. Vous pouvez le réactiver ci-dessous dans la zone de danger.'
+                }
+              </p>
+              <p className={`text-xs mt-1 ${
+                profile?.accountStatus === 'BANNED' ? 'text-red-600' : 'text-orange-600'
+              }`}>
+                Statut actuel: {profile?.accountStatus || 'Non défini'}
               </p>
             </div>
           </div>
@@ -312,7 +392,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 <div className="text-sm font-medium text-gray-500">Statut du compte</div>
                 <div className={`text-gray-800 flex items-center ${isAccountSuspended ? 'text-orange-600' : 'text-green-600'}`}>
                   <div className={`w-2 h-2 rounded-full mr-2 ${isAccountSuspended ? 'bg-orange-500' : 'bg-green-500'}`}></div>
-                  {isAccountSuspended ? 'Suspendu' : 'Actif'}
+                  {accountStatus === 'UNKNOWN' ? 'Statut inconnu' : (isAccountSuspended ? 'Suspendu' : 'Actif')}
                 </div>
               </div>
             </div>
@@ -329,46 +409,12 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
           </div>
           
           <div className="space-y-4">
-            <label className="flex items-start space-x-3">
-              <input 
-                type="checkbox" 
-                defaultChecked 
-                className="mt-1 h-4 w-4 text-pink-600 focus:ring-pink-500 border-gray-300 rounded" 
-              />
-              <div>
-                <div className="font-medium text-gray-800">Profil visible dans les recherches</div>
-                <div className="text-sm text-gray-600">
-                  Permettre aux autres utilisateurs de découvrir votre profil
-                </div>
-              </div>
-            </label>
-            
-            <label className="flex items-start space-x-3">
-              <input 
-                type="checkbox" 
-                defaultChecked 
-                className="mt-1 h-4 w-4 text-pink-600 focus:ring-pink-500 border-gray-300 rounded" 
-              />
-              <div>
-                <div className="font-medium text-gray-800">Recevoir des messages</div>
-                <div className="text-sm text-gray-600">
-                  Autoriser les nouveaux matches à vous envoyer des messages
-                </div>
-              </div>
-            </label>
-            
-            <label className="flex items-start space-x-3">
-              <input 
-                type="checkbox" 
-                className="mt-1 h-4 w-4 text-pink-600 focus:ring-pink-500 border-gray-300 rounded" 
-              />
-              <div>
-                <div className="font-medium text-gray-800">Mode privé</div>
-                <div className="text-sm text-gray-600">
-                  Seules les personnes que vous likez peuvent voir votre profil
-                </div>
-              </div>
-            </label>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <p className="text-sm text-blue-700">
+                <strong>Note:</strong> Les paramètres de confidentialité avancés seront bientôt disponibles. 
+                Pour l'instant, votre profil est visible par défaut aux autres utilisateurs connectés.
+              </p>
+            </div>
           </div>
         </div>
 
@@ -377,7 +423,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
           <div className="flex items-center mb-4">
             <BellIcon className="w-6 h-6 text-yellow-600 mr-3" />
             <h3 className="text-lg font-semibold text-gray-800">
-              Notifications
+              Paramètres de notifications
             </h3>
           </div>
           
@@ -385,25 +431,12 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
             <label className="flex items-start space-x-3">
               <input 
                 type="checkbox" 
-                defaultChecked 
+                checked={notificationSettings.messageNotifications}
+                onChange={(e) => updateNotificationSettings({ messageNotifications: e.target.checked })}
                 className="mt-1 h-4 w-4 text-pink-600 focus:ring-pink-500 border-gray-300 rounded" 
               />
               <div>
-                <div className="font-medium text-gray-800">Nouveaux matches</div>
-                <div className="text-sm text-gray-600">
-                  Recevoir une notification pour chaque nouveau match
-                </div>
-              </div>
-            </label>
-            
-            <label className="flex items-start space-x-3">
-              <input 
-                type="checkbox" 
-                defaultChecked 
-                className="mt-1 h-4 w-4 text-pink-600 focus:ring-pink-500 border-gray-300 rounded" 
-              />
-              <div>
-                <div className="font-medium text-gray-800">Nouveaux messages</div>
+                <div className="font-medium text-gray-800">Notifications de messages</div>
                 <div className="text-sm text-gray-600">
                   Recevoir une notification pour chaque nouveau message
                 </div>
@@ -413,48 +446,36 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
             <label className="flex items-start space-x-3">
               <input 
                 type="checkbox" 
+                checked={notificationSettings.likeNotifications}
+                onChange={(e) => updateNotificationSettings({ likeNotifications: e.target.checked })}
                 className="mt-1 h-4 w-4 text-pink-600 focus:ring-pink-500 border-gray-300 rounded" 
               />
               <div>
-                <div className="font-medium text-gray-800">Emails marketing</div>
+                <div className="font-medium text-gray-800">Notifications de likes</div>
                 <div className="text-sm text-gray-600">
-                  Recevoir des conseils et actualités par email
+                  Recevoir une notification quand quelqu'un like votre profil
+                </div>
+              </div>
+            </label>
+            
+            <label className="flex items-start space-x-3">
+              <input 
+                type="checkbox" 
+                checked={notificationSettings.matchNotifications}
+                onChange={(e) => updateNotificationSettings({ matchNotifications: e.target.checked })}
+                className="mt-1 h-4 w-4 text-pink-600 focus:ring-pink-500 border-gray-300 rounded" 
+              />
+              <div>
+                <div className="font-medium text-gray-800">Notifications de matchs</div>
+                <div className="text-sm text-gray-600">
+                  Recevoir une notification pour chaque nouveau match
                 </div>
               </div>
             </label>
           </div>
         </div>
 
-        {/* Statistiques du compte */}
-        <div className="bg-gradient-to-r from-pink-50 to-purple-50 border border-pink-200 rounded-lg p-6">
-          <div className="flex items-center mb-4">
-            <EyeIcon className="w-6 h-6 text-purple-600 mr-3" />
-            <h3 className="text-lg font-semibold text-gray-800">
-              Statistiques de votre profil
-            </h3>
-          </div>
-          
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-white rounded-lg p-4 text-center">
-              <div className="text-2xl font-bold text-pink-600">127</div>
-              <div className="text-sm text-gray-600">Vues de profil</div>
-            </div>
-            <div className="bg-white rounded-lg p-4 text-center">
-              <div className="text-2xl font-bold text-purple-600">23</div>
-              <div className="text-sm text-gray-600">Likes reçus</div>
-            </div>
-            <div className="bg-white rounded-lg p-4 text-center">
-              <div className="text-2xl font-bold text-blue-600">8</div>
-              <div className="text-sm text-gray-600">Matches actifs</div>
-            </div>
-            <div className="bg-white rounded-lg p-4 text-center">
-              <div className="text-2xl font-bold text-green-600">15</div>
-              <div className="text-sm text-gray-600">Conversations</div>
-            </div>
-          </div>
-        </div>
-
-        {/* ✅ ZONE DE DANGER AVEC DÉCONNEXION AUTOMATIQUE */}
+        {/* Zone de danger avec logique de boutons corrigée */}
         <div className="bg-red-50 border border-red-200 rounded-lg p-6">
           <div className="flex items-center mb-4">
             <ExclamationTriangleIcon className="w-6 h-6 text-red-600 mr-3" />
@@ -464,98 +485,188 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
           </div>
           
           <div className="mb-4">
-            <p className="text-sm text-red-700 mb-4">
+            <p className="text-sm text-red-700 mb-6">
               Ces actions sont importantes. Réfléchissez bien avant de continuer.
             </p>
             
-            <div className="space-y-3">
-              {/* Logique conditionnelle - Suspension OU Réactivation */}
-              {isAccountSuspended ? (
-                /* COMPTE SUSPENDU - Bouton de réactivation */
-                <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
-                  <div className="flex items-start space-x-3">
-                    <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                      <PlayIcon className="w-5 h-5 text-green-600" />
-                    </div>
-                    <div className="flex-1">
-                      <h4 className="font-medium text-green-800 mb-2">Réactiver votre compte</h4>
-                      <p className="text-sm text-green-700 mb-3">
-                        Votre compte est actuellement suspendu. Vous pouvez le réactiver immédiatement pour retrouver l'accès à toutes les fonctionnalités.
-                      </p>
-                      <button
-                        onClick={handleReactivateAccount}
-                        disabled={hookIsLoading}
-                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
-                      >
-                        {hookIsLoading ? (
-                          <div className="flex items-center">
-                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                            Réactivation...
-                          </div>
-                        ) : (
-                          '✅ Réactiver mon compte'
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                /* COMPTE ACTIF - Bouton de suspension avec avertissement de déconnexion */
-                <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-4">
-                  <div className="flex items-start space-x-3">
-                    <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
-                      <PauseIcon className="w-5 h-5 text-orange-600" />
-                    </div>
-                    <div className="flex-1">
-                      <h4 className="font-medium text-orange-800 mb-2">Suspendre temporairement mon compte</h4>
-                      <div className="text-sm text-orange-700 mb-3">
-                        <p className="mb-2">
-                          <strong>⚠️ Attention :</strong> Cette action va :
-                        </p>
-                        <ul className="list-disc list-inside space-y-1 text-xs ml-4">
-                          <li>Suspendre votre compte immédiatement</li>
-                          <li><strong>Vous déconnecter automatiquement</strong></li>
-                          <li>Supprimer vos cookies de session</li>
-                          <li>Vous rediriger vers la page d'accueil publique</li>
-                        </ul>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Bouton Suspension/Réactivation */}
+              {(() => {
+                if (accountStatus === 'SUSPENDED') {
+                  return (
+                    <button
+                      onClick={() => setShowReactivateModal(true)}
+                      disabled={hookIsLoading}
+                      className="flex items-center justify-center px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                    >
+                      {hookIsLoading ? (
+                        <div className="flex items-center">
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                          Réactivation...
+                        </div>
+                      ) : (
+                        <div className="flex items-center">
+                          <PlayIcon className="w-5 h-5 mr-2" />
+                          Réactiver mon compte
+                        </div>
+                      )}
+                    </button>
+                  );
+                }
+                
+                if (accountStatus === 'BANNED') {
+                  return (
+                    <div className="flex items-center justify-center px-4 py-3 bg-red-500 text-white rounded-lg cursor-not-allowed">
+                      <div className="flex items-center">
+                        <LockClosedIcon className="w-5 h-5 mr-2" />
+                        Compte banni - Contactez le support
                       </div>
-                      <button
-                        onClick={() => {
-                          console.log('🔄 Ouverture modale suspension avec déconnexion');
-                          setShowSuspendModal(true);
-                        }}
-                        disabled={isSuspending}
-                        className="px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50 text-sm"
-                      >
-                        {isSuspending ? (
-                          <div className="flex items-center">
-                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                            Suspension...
-                          </div>
-                        ) : (
-                          '🔒 Suspendre et me déconnecter'
-                        )}
-                      </button>
                     </div>
+                  );
+                }
+                
+                if (accountStatus === 'ACTIVE') {
+                  const canSuspend = !isSuspending && !!profile?.id;
+                  
+                  return (
+                    <button
+                      onClick={() => {
+                        if (canSuspend) {
+                          setShowSuspendModal(true);
+                        } else {
+                          onMessage('Impossible de suspendre le compte actuellement', 'error');
+                        }
+                      }}
+                      disabled={!canSuspend}
+                      className={`flex items-center justify-center px-4 py-3 text-white rounded-lg transition-colors ${
+                        canSuspend
+                          ? 'bg-orange-500 hover:bg-orange-600'
+                          : 'bg-gray-400 cursor-not-allowed opacity-50'
+                      }`}
+                    >
+                      {isSuspending ? (
+                        <div className="flex items-center">
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                          Suspension...
+                        </div>
+                      ) : (
+                        <div className="flex items-center">
+                          <PauseIcon className="w-5 h-5 mr-2" />
+                          Suspendre mon compte
+                        </div>
+                      )}
+                    </button>
+                  );
+                }
+                
+                return (
+                  <div className="flex flex-col items-center justify-center px-4 py-3 bg-yellow-400 text-black rounded-lg">
+                    <div className="flex items-center mb-1">
+                      <ExclamationTriangleIcon className="w-5 h-5 mr-2" />
+                      Statut: {accountStatus}
+                    </div>
+                    <div className="text-xs text-center">
+                      {profile?.id ? 'Profile OK - Problème de statut' : 'Profile manquant'}
+                    </div>
+                    {accountStatus === 'UNKNOWN' && (
+                      <div className="text-xs text-center mt-1 text-red-700">
+                        Vérifiez votre base de données
+                      </div>
+                    )}
                   </div>
-                </div>
-              )}
-              
-              {/* Bouton de suppression - toujours visible */}
+                );
+              })()}
+
+              {/* Bouton Suppression */}
               <button 
                 onClick={() => setShowDeleteModal(true)}
-                className="w-full md:w-auto px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
+                className="flex items-center justify-center px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
               >
-                🗑️ Supprimer définitivement mon compte
+                <XMarkIcon className="w-5 h-5 mr-2" />
+                Supprimer mon compte
               </button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* ✅ MODALE DE SUSPENSION MODIFIÉE AVEC AVERTISSEMENT DE DÉCONNEXION */}
+      {/* Modale de réactivation */}
       <AnimatePresence>
-        {showSuspendModal && !isAccountSuspended && (
+        {showReactivateModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                setShowReactivateModal(false);
+              }
+            }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6"
+            >
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <PlayIcon className="w-8 h-8 text-green-600" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">
+                  Réactiver votre compte ?
+                </h3>
+                <p className="text-gray-600">
+                  Votre profil redeviendra visible et vous recommencerez à recevoir des notifications.
+                </p>
+              </div>
+
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+                <h4 className="font-medium text-green-800 mb-3">
+                  ✅ Après réactivation :
+                </h4>
+                <ul className="text-sm text-green-700 space-y-1">
+                  <li>• Votre profil sera à nouveau visible</li>
+                  <li>• Vous pourrez envoyer et recevoir des messages</li>
+                  <li>• Les notifications seront réactivées</li>
+                  <li>• Vous pourrez voir de nouveaux profils</li>
+                </ul>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowReactivateModal(false)}
+                  className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={handleReactivateAccount}
+                  disabled={hookIsLoading}
+                  className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors flex items-center justify-center"
+                >
+                  {hookIsLoading ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                      Réactivation...
+                    </>
+                  ) : (
+                    <>
+                      <PlayIcon className="w-4 h-4 mr-2" />
+                      Réactiver
+                    </>
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modale de suspension */}
+      <AnimatePresence>
+        {showSuspendModal && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -578,14 +689,13 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                   <PauseIcon className="w-8 h-8 text-orange-600" />
                 </div>
                 <h3 className="text-xl font-bold text-gray-900 mb-2">
-                  Suspendre et me déconnecter ?
+                  Suspendre votre compte ?
                 </h3>
                 <p className="text-gray-600">
                   Votre compte sera suspendu et vous serez automatiquement déconnecté.
                 </p>
               </div>
 
-              {/* ⚠️ AVERTISSEMENT DE DÉCONNEXION */}
               <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
                 <h4 className="font-medium text-red-800 mb-3 flex items-center gap-2">
                   ⚠️ Déconnexion automatique
@@ -598,7 +708,6 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 </ul>
               </div>
 
-              {/* Informations sur la suspension */}
               <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-6">
                 <h4 className="font-medium text-orange-800 mb-3">
                   ⏸️ Pendant la suspension :
@@ -612,7 +721,6 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 </ul>
               </div>
 
-              {/* Sélection de la raison */}
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Raison de la suspension (optionnel) :
@@ -632,7 +740,6 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                 </select>
               </div>
 
-              {/* Actions */}
               <div className="flex gap-3">
                 <button
                   onClick={() => {
@@ -657,24 +764,17 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                   ) : (
                     <>
                       <PauseIcon className="w-4 h-4 mr-2" />
-                      Suspendre et déconnecter
+                      Suspendre
                     </>
                   )}
                 </button>
-              </div>
-
-              {/* Avertissement final */}
-              <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <p className="text-xs text-blue-700 text-center">
-                  ℹ️ Après suspension, connectez-vous avec vos identifiants pour réactiver votre compte.
-                </p>
               </div>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* MODALE DE SUPPRESSION */}
+      {/* Modale de suppression */}
       <AnimatePresence>
         {showDeleteModal && (
           <motion.div

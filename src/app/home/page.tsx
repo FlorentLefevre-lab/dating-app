@@ -1,4 +1,4 @@
-// src/app/page.tsx - Version intégrée avec l'API Discover
+// src/app/page.tsx - Version avec affichage du statut du compte
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -56,6 +56,17 @@ interface DiscoverApiResponse {
   error?: string
 }
 
+// ================================
+// TYPE POUR LE STATUT DU COMPTE
+// ================================
+
+interface AccountStatus {
+  accountStatus: string
+  suspendedAt?: string
+  suspensionReason?: string
+  suspendedUntil?: string
+}
+
 export default function HomePage() {
   const { data: session } = useSession()
   const router = useRouter()
@@ -71,6 +82,14 @@ export default function HomePage() {
   } = useRealTimeStats(30000) // Refresh toutes les 30 secondes
 
   // ================================
+  // ÉTATS POUR LE STATUT DU COMPTE
+  // ================================
+  
+  const [accountStatus, setAccountStatus] = useState<AccountStatus | null>(null)
+  const [statusLoading, setStatusLoading] = useState(true)
+  const [statusError, setStatusError] = useState<string | null>(null)
+
+  // ================================
   // ÉTATS POUR LA DÉCOUVERTE (API)
   // ================================
   
@@ -82,6 +101,55 @@ export default function HomePage() {
   const [matchUser, setMatchUser] = useState<{ id: string; name: string } | null>(null)
 
   const currentUser = discoveryUsers[currentUserIndex]
+
+  // ================================
+  // CHARGEMENT DU STATUT DU COMPTE
+  // ================================
+
+  const loadAccountStatus = async () => {
+    try {
+      setStatusLoading(true)
+      setStatusError(null)
+
+      console.log('🔍 Chargement du statut du compte...')
+
+      const response = await fetch('/api/profile', {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+
+      const data = await response.json()
+
+      console.log('📋 Statut du compte récupéré:', {
+        accountStatus: data.accountStatus,
+        suspendedAt: data.suspendedAt,
+        suspensionReason: data.suspensionReason
+      })
+
+      setAccountStatus({
+        accountStatus: data.accountStatus || 'ACTIVE',
+        suspendedAt: data.suspendedAt,
+        suspensionReason: data.suspensionReason,
+        suspendedUntil: data.suspendedUntil
+      })
+
+    } catch (err: any) {
+      console.error('❌ Erreur chargement statut:', err)
+      setStatusError(err.message)
+      // Fallback vers ACTIVE si erreur
+      setAccountStatus({ accountStatus: 'ACTIVE' })
+    } finally {
+      setStatusLoading(false)
+    }
+  }
 
   // ================================
   // CHARGEMENT DES PROFILS DISCOVER
@@ -146,9 +214,10 @@ export default function HomePage() {
     }
   }
 
-  // Chargement initial des profils
+  // Chargement initial
   useEffect(() => {
     if (session?.user) {
+      loadAccountStatus()
       loadDiscoverProfiles()
     }
   }, [session])
@@ -307,6 +376,156 @@ export default function HomePage() {
     return Math.round((100 - compatibility) / 10 + 0.5)
   }
 
+  // ================================
+  // COMPOSANT D'AFFICHAGE DU STATUT
+  // ================================
+
+  const AccountStatusBanner = () => {
+    if (statusLoading) {
+      return (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+            <span className="text-sm text-blue-700">Vérification du statut du compte...</span>
+          </div>
+        </div>
+      )
+    }
+
+    if (statusError) {
+      return (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-yellow-600">⚠️</span>
+              <span className="text-sm text-yellow-700">Impossible de vérifier le statut du compte</span>
+            </div>
+            <button
+              onClick={loadAccountStatus}
+              className="text-xs bg-yellow-500 text-white px-2 py-1 rounded hover:bg-yellow-600"
+            >
+              Réessayer
+            </button>
+          </div>
+        </div>
+      )
+    }
+
+    if (!accountStatus) return null
+
+    // Affichage selon le statut
+    switch (accountStatus.accountStatus) {
+      case 'SUSPENDED':
+        return (
+          <div className="bg-orange-50 border-l-4 border-orange-500 rounded-r-lg p-4 mb-6">
+            <div className="flex items-start">
+              <div className="flex-shrink-0">
+                <span className="text-orange-500 text-xl">⏸️</span>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-semibold text-orange-800">
+                  Compte suspendu
+                </h3>
+                <p className="text-sm text-orange-700 mt-1">
+                  Votre compte est actuellement suspendu. Votre profil n'est pas visible et vous ne pouvez pas interagir avec d'autres utilisateurs.
+                </p>
+                {accountStatus.suspensionReason && (
+                  <p className="text-xs text-orange-600 mt-2">
+                    Raison: {accountStatus.suspensionReason}
+                  </p>
+                )}
+                {accountStatus.suspendedAt && (
+                  <p className="text-xs text-orange-600">
+                    Suspendu le: {new Date(accountStatus.suspendedAt).toLocaleDateString('fr-FR')}
+                  </p>
+                )}
+                <div className="mt-3">
+                  <Link
+                    href="/profile?tab=settings"
+                    className="inline-flex items-center gap-1 bg-orange-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-orange-600 transition-colors"
+                  >
+                    ⚙️ Gérer mon compte
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+
+      case 'BANNED':
+        return (
+          <div className="bg-red-50 border-l-4 border-red-500 rounded-r-lg p-4 mb-6">
+            <div className="flex items-start">
+              <div className="flex-shrink-0">
+                <span className="text-red-500 text-xl">🚫</span>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-semibold text-red-800">
+                  Compte banni
+                </h3>
+                <p className="text-sm text-red-700 mt-1">
+                  Votre compte a été banni. Veuillez contacter le support pour plus d'informations.
+                </p>
+                <div className="mt-3">
+                  <a
+                    href="mailto:support@votre-site.com"
+                    className="inline-flex items-center gap-1 bg-red-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-red-600 transition-colors"
+                  >
+                    📧 Contacter le support
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+
+      case 'PENDING_VERIFICATION':
+        return (
+          <div className="bg-yellow-50 border-l-4 border-yellow-500 rounded-r-lg p-4 mb-6">
+            <div className="flex items-start">
+              <div className="flex-shrink-0">
+                <span className="text-yellow-500 text-xl">⏳</span>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-semibold text-yellow-800">
+                  Vérification en cours
+                </h3>
+                <p className="text-sm text-yellow-700 mt-1">
+                  Votre compte est en cours de vérification. Certaines fonctionnalités peuvent être limitées.
+                </p>
+              </div>
+            </div>
+          </div>
+        )
+
+      case 'ACTIVE':
+        return (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
+            <div className="flex items-center gap-2">
+              <span className="text-green-600">✅</span>
+              <span className="text-sm text-green-700 font-medium">Compte actif</span>
+              <div className="ml-auto flex items-center gap-1">
+                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                <span className="text-xs text-green-600">En ligne</span>
+              </div>
+            </div>
+          </div>
+        )
+
+      default:
+        return (
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-4">
+            <div className="flex items-center gap-2">
+              <span className="text-gray-600">❓</span>
+              <span className="text-sm text-gray-700">
+                Statut: {accountStatus.accountStatus || 'Inconnu'}
+              </span>
+            </div>
+          </div>
+        )
+    }
+  }
+
   // 🎯 Actions rapides avec badges de notification
   const quickActions = [
     { 
@@ -347,6 +566,9 @@ export default function HomePage() {
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           
+          {/* 🔔 BANNIÈRE DE STATUT DU COMPTE */}
+          <AccountStatusBanner />
+          
           {/* 🎯 EN-TÊTE DE BIENVENUE */}
           <div className="mb-6">
             <div className="flex items-center justify-between">
@@ -354,8 +576,34 @@ export default function HomePage() {
                 <h1 className="text-3xl font-bold text-gray-800 mb-2">
                   Salut {session?.user?.name?.split(' ')[0] || 'toi'} ! 👋
                 </h1>
-                <div className="text-gray-600">
-                  Voici votre activité et les dernières notifications
+                <div className="text-gray-600 flex items-center gap-3">
+                  <span>Voici votre activité et les dernières notifications</span>
+                  
+                  {/* 🔍 INDICATEUR DE STATUT COMPACT DANS L'EN-TÊTE */}
+                  {!statusLoading && accountStatus && (
+                    <div className="flex items-center gap-2">
+                      <div className="text-xs text-gray-400">•</div>
+                      <div className="flex items-center gap-1.5">
+                        <div className={`w-2 h-2 rounded-full ${
+                          accountStatus.accountStatus === 'ACTIVE' ? 'bg-green-500' :
+                          accountStatus.accountStatus === 'SUSPENDED' ? 'bg-orange-500' :
+                          accountStatus.accountStatus === 'BANNED' ? 'bg-red-500' :
+                          'bg-gray-400'
+                        }`}></div>
+                        <span className={`text-xs font-medium ${
+                          accountStatus.accountStatus === 'ACTIVE' ? 'text-green-600' :
+                          accountStatus.accountStatus === 'SUSPENDED' ? 'text-orange-600' :
+                          accountStatus.accountStatus === 'BANNED' ? 'text-red-600' :
+                          'text-gray-600'
+                        }`}>
+                          {accountStatus.accountStatus === 'ACTIVE' ? 'Actif' :
+                           accountStatus.accountStatus === 'SUSPENDED' ? 'Suspendu' :
+                           accountStatus.accountStatus === 'BANNED' ? 'Banni' :
+                           accountStatus.accountStatus}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
               
@@ -462,8 +710,26 @@ export default function HomePage() {
                 </Link>
               </div>
 
-              {/* État de chargement */}
-              {discoverLoading ? (
+              {/* Limitation si compte suspendu */}
+              {accountStatus?.accountStatus === 'SUSPENDED' || accountStatus?.accountStatus === 'BANNED' ? (
+                <div className="flex-1 flex items-center justify-center">
+                  <div className="text-center p-6">
+                    <div className="text-4xl mb-4">⏸️</div>
+                    <h3 className="text-lg font-semibold text-gray-800 mb-2">
+                      Fonctionnalité indisponible
+                    </h3>
+                    <p className="text-sm text-gray-600 mb-4">
+                      La découverte n'est pas disponible pour les comptes {accountStatus.accountStatus === 'SUSPENDED' ? 'suspendus' : 'bannis'}.
+                    </p>
+                    <Link 
+                      href="/profile?tab=settings" 
+                      className="bg-orange-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-orange-600 transition-colors"
+                    >
+                      Gérer mon compte
+                    </Link>
+                  </div>
+                </div>
+              ) : discoverLoading ? (
                 <div className="flex-1 flex items-center justify-center">
                   <div className="text-center">
                     <div className="w-8 h-8 border-2 border-pink-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>

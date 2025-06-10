@@ -1,566 +1,869 @@
-// prisma/seed.ts - Script pour remplir la BDD PostgreSQL avec 100 utilisateurs et des données aléatoires
-import { PrismaClient, Gender, AuthMethod, MaritalStatus, AccountStatus } from '@prisma/client';
-import bcrypt from 'bcryptjs';
+'use client';
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { signOut } from 'next-auth/react';
+import { 
+  ExclamationTriangleIcon,
+  ShieldCheckIcon,
+  UserCircleIcon,
+  BellIcon,
+  LockClosedIcon,
+  PauseIcon,
+  XMarkIcon,
+  PlayIcon
+} from '@heroicons/react/24/outline';
 
-const prisma = new PrismaClient();
+import { SettingsPanelProps } from '../../types/profiles';
+import { useAccountSuspension } from '@/hooks/useAccountSuspension';
 
-// Données pour générer des utilisateurs variés
-const prenoms = [
-  'David', 'Alice', 'Marie', 'Pierre', 'Sarah', 'Thomas', 'Emma', 'Lucas', 'Léa', 'Antoine',
-  'Chloé', 'Nicolas', 'Camille', 'Julien', 'Manon', 'Alexandre', 'Sophie', 'Maxime', 'Clara', 'Romain',
-  'Julie', 'Benjamin', 'Laura', 'Quentin', 'Morgane', 'Valentin', 'Océane', 'Hugo', 'Mathilde', 'Paul',
-  'Anaïs', 'Kevin', 'Inès', 'Florian', 'Eva', 'Arthur', 'Jade', 'Louis', 'Amandine', 'Simon',
-  'Pauline', 'Clément', 'Lola', 'Baptiste', 'Elise', 'Théo', 'Marion', 'Adrien', 'Justine', 'Fabien'
-];
-
-const noms = [
-  'Martin', 'Dupont', 'Leroy', 'Dubois', 'Moreau', 'Laurent', 'Simon', 'Michel', 'Garcia', 'David',
-  'Bertrand', 'Roux', 'Vincent', 'Fournier', 'Morel', 'Girard', 'Andre', 'Lefevre', 'Mercier', 'Durand',
-  'Lambert', 'Bonnet', 'François', 'Martinez', 'Legrand', 'Garnier', 'Faure', 'Rousseau', 'Blanc', 'Guerin',
-  'Muller', 'Henry', 'Roussel', 'Nicolas', 'Perrin', 'Morin', 'Mathieu', 'Clement', 'Gauthier', 'Dumont',
-  'Lopez', 'Fontaine', 'Chevalier', 'Robin', 'Masson', 'Sanchez', 'Gerard', 'Nguyen', 'Boyer', 'Denis'
-];
-
-const villes = [
-  'Paris', 'Lyon', 'Marseille', 'Toulouse', 'Nice', 'Nantes', 'Strasbourg', 'Montpellier', 'Bordeaux', 'Lille',
-  'Rennes', 'Reims', 'Le Havre', 'Saint-Étienne', 'Toulon', 'Grenoble', 'Dijon', 'Angers', 'Nîmes', 'Villeurbanne',
-  'Clermont-Ferrand', 'Aix-en-Provence', 'Brest', 'Limoges', 'Tours', 'Amiens', 'Perpignan', 'Metz', 'Besançon', 'Orléans'
-];
-
-const departments = [
-  'Ain', 'Aisne', 'Allier', 'Alpes-de-Haute-Provence', 'Hautes-Alpes', 'Alpes-Maritimes', 'Ardèche', 'Ardennes',
-  'Ariège', 'Aube', 'Aude', 'Aveyron', 'Bouches-du-Rhône', 'Calvados', 'Cantal', 'Charente', 'Charente-Maritime',
-  'Cher', 'Corrèze', 'Corse-du-Sud', 'Haute-Corse', 'Côte-d\'Or', 'Côtes-d\'Armor', 'Creuse', 'Dordogne', 'Doubs',
-  'Drôme', 'Eure', 'Eure-et-Loir', 'Finistère', 'Gard', 'Haute-Garonne', 'Gers', 'Gironde', 'Hérault', 'Ille-et-Vilaine'
-];
-
-const regions = [
-  'Auvergne-Rhône-Alpes', 'Bourgogne-Franche-Comté', 'Bretagne', 'Centre-Val de Loire', 'Corse', 'Grand Est',
-  'Hauts-de-France', 'Île-de-France', 'Normandie', 'Nouvelle-Aquitaine', 'Occitanie', 'Pays de la Loire',
-  'Provence-Alpes-Côte d\'Azur'
-];
-
-const professions = [
-  'Ingénieur logiciel', 'Designer UX/UI', 'Chef cuisinier', 'Médecin', 'Professeur', 'Avocat', 'Architecte',
-  'Journaliste', 'Photographe', 'Marketing', 'Consultant', 'Infirmier', 'Comptable', 'Artiste', 'Musicien',
-  'Vétérinaire', 'Pharmacien', 'Psychologue', 'Entrepreneur', 'Commercial', 'Développeur web', 'Data scientist',
-  'Chef de projet', 'Graphiste', 'Traducteur', 'Kinésithérapeute', 'Banquier', 'Agent immobilier', 'Policier', 'Pompier'
-];
-
-const centresInteret = [
-  'technologie', 'voyages', 'cuisine', 'sport', 'lecture', 'cinéma', 'musique', 'art', 'photographie', 'danse',
-  'randonnée', 'yoga', 'fitness', 'jardinage', 'mode', 'vin', 'gaming', 'théâtre', 'peinture', 'course à pied',
-  'natation', 'ski', 'surf', 'escalade', 'méditation', 'astronomie', 'histoire', 'science', 'littérature', 'bénévolat'
-];
-
-const zodiacSigns = [
-  'Bélier', 'Taureau', 'Gémeaux', 'Cancer', 'Lion', 'Vierge', 
-  'Balance', 'Scorpion', 'Sagittaire', 'Capricorne', 'Verseau', 'Poissons'
-];
-
-const dietTypes = [
-  'Omnivore', 'Végétarien', 'Végétalien', 'Pescatarien', 'Flexitarien', 'Sans gluten', 'Cétogène', 'Paléo'
-];
-
-const religions = [
-  'Catholique', 'Protestant', 'Musulman', 'Juif', 'Bouddhiste', 'Hindou', 'Athée', 'Agnostique', 'Spirituel', 'Autre'
-];
-
-const ethnicities = [
-  'Européenne', 'Africaine', 'Asiatique', 'Latino-américaine', 'Moyen-orientale', 'Mixte', 'Autre', 'Non spécifié'
-];
-
-// Valeurs des enums du schéma
-const genderValues = [Gender.MALE, Gender.FEMALE, Gender.NON_BINARY, Gender.OTHER];
-const maritalStatusValues = [MaritalStatus.SINGLE, MaritalStatus.DIVORCED, MaritalStatus.WIDOWED, MaritalStatus.SEPARATED];
-const accountStatusValues = [AccountStatus.ACTIVE, AccountStatus.PENDING_VERIFICATION];
-const authMethodValues = [AuthMethod.EMAIL_PASSWORD, AuthMethod.GOOGLE, AuthMethod.FACEBOOK, AuthMethod.APPLE];
-
-const bios = [
-  'Passionné(e) de découvertes et d\'aventures',
-  'À la recherche de moments authentiques',
-  'Créatif(ve) dans l\'âme, curieux/se de nature',
-  'Amateur/rice de bons moments entre amis',
-  'Toujours partant(e) pour de nouvelles expériences',
-  'Fan de voyages et de cultures différentes',
-  'Adore les soirées cocooning comme les sorties animées',
-  'Passionné(e) par mon métier et la vie en général',
-  'À l\'écoute, bienveillant(e) et spontané(e)',
-  'Epicurien(ne) qui profite de chaque instant'
-];
-
-// Fonction utilitaire pour générer des nombres aléatoires
-function randomInt(min: number, max: number): number {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
-}
-
-// Fonction pour choisir un élément aléatoire dans un tableau
-function randomChoice<T>(array: T[]): T {
-  return array[Math.floor(Math.random() * array.length)];
-}
-
-// Fonction pour choisir plusieurs éléments aléatoires dans un tableau
-function randomChoices<T>(array: T[], count: number): T[] {
-  const shuffled = [...array].sort(() => 0.5 - Math.random());
-  return shuffled.slice(0, count);
-}
-
-// Fonction pour générer des paires aléatoires sans doublons
-function generateRandomPairs(userIds: string[], count: number): Array<[string, string]> {
-  const pairs: Array<[string, string]> = [];
-  const usedPairs = new Set<string>();
+const SettingsPanel: React.FC<SettingsPanelProps> = ({ 
+  profile, 
+  photos, 
+  session, 
+  onMessage
+}) => {
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showSuspendModal, setShowSuspendModal] = useState(false);
+  const [showReactivateModal, setShowReactivateModal] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState('');
+  const [suspendReason, setSuspendReason] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [isSuspending, setIsSuspending] = useState(false);
   
-  while (pairs.length < count && pairs.length < (userIds.length * (userIds.length - 1)) / 2) {
-    const user1 = randomChoice(userIds);
-    const user2 = randomChoice(userIds);
-    
-    if (user1 === user2) continue;
-    
-    const pairKey = [user1, user2].sort().join('-');
-    if (usedPairs.has(pairKey)) continue;
-    
-    usedPairs.add(pairKey);
-    pairs.push([user1, user2]);
-  }
-  
-  return pairs;
-}
-
-// Fonction pour générer un code postal français aléatoire
-function generatePostcode(): string {
-  return String(randomInt(1000, 95999)).padStart(5, '0');
-}
-
-async function main() {
-  console.log('🌱 Seed de la base de données PostgreSQL avec 100 utilisateurs...');
-
-  try {
-    // Générer un mot de passe haché générique pour tous les utilisateurs de test
-    const defaultPassword = 'password123';
-    const hashedPassword = await bcrypt.hash(defaultPassword, 12);
-    console.log(`🔒 Mot de passe par défaut pour tous les utilisateurs: "${defaultPassword}"`);
-
-    // 1. Nettoyer TOUTES les données existantes
-    console.log('🧹 Nettoyage complet de la base de données...');
-    
-    // Supprimer dans l'ordre pour respecter les contraintes de clés étrangères
-    await prisma.profileView.deleteMany();
-    console.log('  ✓ Vues de profil supprimées');
-    
-    await prisma.block.deleteMany();
-    console.log('  ✓ Blocages supprimés');
-    
-    await prisma.dislike.deleteMany();
-    console.log('  ✓ Dislikes supprimés');
-    
-    await prisma.like.deleteMany();
-    console.log('  ✓ Likes supprimés');
-    
-    await prisma.photo.deleteMany();
-    console.log('  ✓ Photos supprimées');
-    
-    await prisma.userPreferences.deleteMany();
-    console.log('  ✓ Préférences supprimées');
-    
-    await prisma.notificationSettings.deleteMany();
-    console.log('  ✓ Paramètres de notification supprimés');
-    
-    // Supprimer les sessions et comptes NextAuth
-    await prisma.session.deleteMany();
-    console.log('  ✓ Sessions supprimées');
-    
-    await prisma.account.deleteMany();
-    console.log('  ✓ Comptes supprimés');
-    
-    await prisma.verificationToken.deleteMany();
-    console.log('  ✓ Tokens de vérification supprimés');
-    
-    // Maintenant on peut supprimer tous les utilisateurs
-    await prisma.user.deleteMany();
-    console.log('  ✓ Utilisateurs supprimés');
-    
-    console.log('✅ Base de données complètement nettoyée');
-
-    // 2. Créer 100 utilisateurs de test
-    console.log('\n👥 Création de 100 utilisateurs...');
-    console.log('✉️ Tous les emails seront marqués comme vérifiés');
-    
-    const users = [];
-    
-    for (let i = 0; i < 100; i++) {
-      const prenom = randomChoice(prenoms);
-      const nom = randomChoice(noms);
-      const email = `${prenom.toLowerCase()}.${nom.toLowerCase()}${i}@test.com`;
-      const name = `${prenom} ${nom}`;
-      const age = randomInt(18, 50);
-      const profession = randomChoice(professions);
-      const ville = randomChoice(villes);
-      const department = randomChoice(departments);
-      const region = randomChoice(regions);
-      const location = `${ville}, France`;
-      const gender = randomChoice(genderValues);
-      const maritalStatus = Math.random() > 0.3 ? randomChoice(maritalStatusValues) : null;
-      const interests = randomChoices(centresInteret, randomInt(3, 8));
-      const bio = randomChoice(bios);
-      const zodiacSign = Math.random() > 0.4 ? randomChoice(zodiacSigns) : null;
-      const dietType = Math.random() > 0.6 ? randomChoice(dietTypes) : null;
-      const religion = Math.random() > 0.5 ? randomChoice(religions) : null;
-      const ethnicity = Math.random() > 0.7 ? randomChoice(ethnicities) : null;
-      const postcode = generatePostcode();
-      const accountStatus = Math.random() > 0.95 ? randomChoice(accountStatusValues) : AccountStatus.ACTIVE;
-      const primaryAuthMethod = Math.random() > 0.8 ? randomChoice(authMethodValues) : AuthMethod.EMAIL_PASSWORD;
-      const isOnline = Math.random() > 0.7;
-      const lastSeen = isOnline ? new Date() : new Date(Date.now() - randomInt(1, 72) * 60 * 60 * 1000);
-      
-      const user = await prisma.user.create({
-        data: {
-          email,
-          name,
-          age,
-          bio,
-          location,
-          profession,
-          gender,
-          maritalStatus,
-          zodiacSign,
-          dietType,
-          religion,
-          ethnicity,
-          department,
-          postcode,
-          region,
-          interests,
-          hashedPassword,
-          emailVerified: new Date(),
-          accountStatus,
-          primaryAuthMethod,
-          isOnline,
-          lastSeen,
-          createdAt: new Date(Date.now() - randomInt(1, 30) * 24 * 60 * 60 * 1000), // Créé dans les 30 derniers jours
-          updatedAt: new Date()
-        }
-      });
-      
-      users.push(user);
-      
-      // Créer des préférences pour chaque utilisateur
-      await prisma.userPreferences.create({
-        data: {
-          userId: user.id,
-          minAge: randomInt(18, Math.max(18, age - 10)),
-          maxAge: randomInt(Math.min(age + 5, 60), 60),
-          maxDistance: randomChoice([10, 25, 50, 100, 200]),
-          gender: Math.random() > 0.3 ? randomChoice(genderValues) : null,
-          lookingFor: Math.random() > 0.5 ? randomChoice(['Relation sérieuse', 'Relation décontractée', 'Amitié', 'Je ne sais pas encore']) : null
-        }
-      });
-      
-      // Créer des paramètres de notification pour chaque utilisateur
-      await prisma.notificationSettings.create({
-        data: {
-          userId: user.id,
-          messageNotifications: Math.random() > 0.1,
-          likeNotifications: Math.random() > 0.2,
-          matchNotifications: Math.random() > 0.05,
-          soundEnabled: Math.random() > 0.3,
-          vibrationEnabled: Math.random() > 0.4,
-          quietHoursStart: Math.random() > 0.6 ? "22:00" : null,
-          quietHoursEnd: Math.random() > 0.6 ? "08:00" : null
-        }
-      });
-      
-      // Créer 1-4 photos pour certains utilisateurs
-      if (Math.random() > 0.2) {
-        const photoCount = randomInt(1, 4);
-        for (let j = 0; j < photoCount; j++) {
-          await prisma.photo.create({
-            data: {
-              userId: user.id,
-              url: `https://images.unsplash.com/photo-${randomInt(1500000000, 1700000000)}-${randomInt(100000, 999999)}?w=400&h=600&fit=crop&crop=faces`,
-              isPrimary: j === 0,
-              createdAt: new Date(Date.now() - randomInt(1, 15) * 24 * 60 * 60 * 1000)
-            }
-          });
-        }
-      }
-      
-      // Afficher la progression
-      if ((i + 1) % 10 === 0) {
-        console.log(`  ✓ ${i + 1} utilisateurs créés...`);
-      }
-    }
-
-    console.log(`✅ ${users.length} utilisateurs créés avec emails vérifiés`);
-
-    // Récupérer tous les IDs des utilisateurs
-    const userIds = users.map(user => user.id);
-
-    // 3. Créer des likes aléatoires (environ 200-300 likes)
-    console.log('\n❤️ Création des likes...');
-    
-    const targetLikeCount = randomInt(200, 300);
-    const likePairs = generateRandomPairs(userIds, targetLikeCount);
-    
-    const likes = [];
-    for (const [senderId, receiverId] of likePairs) {
-      const like = await prisma.like.create({
-        data: {
-          senderId,
-          receiverId,
-          createdAt: new Date(Date.now() - randomInt(1, 14) * 24 * 60 * 60 * 1000)
-        }
-      });
-      likes.push(like);
-    }
-    
-    console.log(`✅ ${likes.length} likes créés`);
-
-    // 4. Créer des dislikes aléatoires (environ 150-200 dislikes)
-    console.log('\n👎 Création des dislikes...');
-    
-    const targetDislikeCount = randomInt(150, 200);
-    const existingLikePairs = new Set(likePairs.map(([a, b]) => [a, b].sort().join('-')));
-    
-    // Générer des paires pour les dislikes en évitant celles qui ont déjà des likes
-    const dislikePairs: Array<[string, string]> = [];
-    const usedDislikePairs = new Set<string>();
-    
-    while (dislikePairs.length < targetDislikeCount) {
-      const user1 = randomChoice(userIds);
-      const user2 = randomChoice(userIds);
-      
-      if (user1 === user2) continue;
-      
-      const pairKey = [user1, user2].sort().join('-');
-      if (usedDislikePairs.has(pairKey) || existingLikePairs.has(pairKey)) continue;
-      
-      usedDislikePairs.add(pairKey);
-      dislikePairs.push([user1, user2]);
-    }
-    
-    const dislikes = [];
-    for (const [senderId, receiverId] of dislikePairs) {
-      const dislike = await prisma.dislike.create({
-        data: {
-          senderId,
-          receiverId,
-          createdAt: new Date(Date.now() - randomInt(1, 14) * 24 * 60 * 60 * 1000)
-        }
-      });
-      dislikes.push(dislike);
-    }
-    
-    console.log(`✅ ${dislikes.length} dislikes créés`);
-
-    // 5. Créer des matchs à partir des likes existants
-    console.log('\n💕 Création de matchs à partir des likes existants...');
-    
-    // Sélectionner aléatoirement 30-50% des likes pour créer des matchs
-    const matchPercentage = randomInt(30, 50) / 100;
-    const potentialMatches = randomChoices(likes, Math.floor(likes.length * matchPercentage));
-    
-    let matchesCreated = 0;
-    const matchedPairs = new Set<string>();
-    
-    for (const like of potentialMatches) {
-      const pairKey = [like.senderId, like.receiverId].sort().join('-');
-      
-      // Vérifier si on n'a pas déjà créé ce match
-      if (matchedPairs.has(pairKey)) continue;
-      
-      // Vérifier si le like réciproque n'existe pas déjà
-      const reciprocalExists = await prisma.like.findFirst({
-        where: {
-          senderId: like.receiverId,
-          receiverId: like.senderId
-        }
-      });
-      
-      if (!reciprocalExists) {
-        // Créer le like réciproque pour former un match
-        await prisma.like.create({
-          data: {
-            senderId: like.receiverId,
-            receiverId: like.senderId,
-            createdAt: new Date(like.createdAt.getTime() + randomInt(1, 24) * 60 * 60 * 1000)
-          }
-        });
-        matchesCreated++;
-        matchedPairs.add(pairKey);
-      }
-    }
-    
-    console.log(`✅ ${matchesCreated} nouveaux matchs créés à partir des likes existants`);
-    
-    // 6. Créer des matchs supplémentaires directs (50-80 matchs au total)
-    console.log('\n💕 Création de matchs supplémentaires...');
-    
-    const targetTotalMatches = randomInt(50, 80);
-    const additionalMatchesNeeded = Math.max(0, targetTotalMatches - matchesCreated);
-    
-    if (additionalMatchesNeeded > 0) {
-      const matchPairs = generateRandomPairs(userIds, additionalMatchesNeeded);
-      
-      // Filtrer les paires qui n'ont pas déjà de likes ou dislikes
-      const existingPairs = new Set([
-        ...likePairs.map(([a, b]) => [a, b].sort().join('-')),
-        ...dislikePairs.map(([a, b]) => [a, b].sort().join('-')),
-        ...Array.from(matchedPairs)
-      ]);
-      
-      const filteredMatchPairs = matchPairs.filter(([a, b]) => {
-        const pairKey = [a, b].sort().join('-');
-        return !existingPairs.has(pairKey);
-      });
-      
-      let additionalMatchesCreated = 0;
-      for (const [user1, user2] of filteredMatchPairs) {
-        const baseTime = Date.now() - randomInt(1, 7) * 24 * 60 * 60 * 1000;
-        
-        // Créer les deux likes réciproques pour former un match
-        await prisma.like.create({
-          data: {
-            senderId: user1,
-            receiverId: user2,
-            createdAt: new Date(baseTime)
-          }
-        });
-        
-        await prisma.like.create({
-          data: {
-            senderId: user2,
-            receiverId: user1,
-            createdAt: new Date(baseTime + randomInt(1, 24) * 60 * 60 * 1000)
-          }
-        });
-        
-        additionalMatchesCreated++;
-        matchedPairs.add([user1, user2].sort().join('-'));
-      }
-      
-      console.log(`✅ ${additionalMatchesCreated} matchs supplémentaires créés`);
-      matchesCreated += additionalMatchesCreated;
-    }
-    
-    console.log(`✅ TOTAL: ${matchesCreated} matchs (likes réciproques) dans la base`);
-
-    // 7. Créer des vues de profil aléatoires
-    console.log('\n👀 Création des vues de profil...');
-    
-    const targetProfileViewCount = randomInt(300, 500);
-    const profileViewPairs = generateRandomPairs(userIds, targetProfileViewCount);
-    
-    const profileViews = [];
-    for (const [viewerId, viewedId] of profileViewPairs) {
-      const profileView = await prisma.profileView.create({
-        data: {
-          viewerId,
-          viewedId,
-          createdAt: new Date(Date.now() - randomInt(1, 21) * 24 * 60 * 60 * 1000)
-        }
-      });
-      profileViews.push(profileView);
-    }
-    
-    console.log(`✅ ${profileViews.length} vues de profil créées`);
-
-    // 8. Créer quelques blocages (5-15 blocages)
-    console.log('\n🚫 Création des blocages...');
-    
-    const targetBlockCount = randomInt(5, 15);
-    const blockPairs = generateRandomPairs(userIds, targetBlockCount);
-    
-    const blocks = [];
-    const blockReasons = [
-      'Comportement inapproprié',
-      'Spam',
-      'Faux profil',
-      'Harcèlement',
-      'Contenu offensant',
-      null // Parfois sans raison spécifiée
-    ];
-    
-    for (const [blockerId, blockedId] of blockPairs) {
-      const block = await prisma.block.create({
-        data: {
-          blockerId,
-          blockedId,
-          reason: Math.random() > 0.3 ? randomChoice(blockReasons) : null,
-          createdAt: new Date(Date.now() - randomInt(1, 30) * 24 * 60 * 60 * 1000)
-        }
-      });
-      blocks.push(block);
-    }
-    
-    console.log(`✅ ${blocks.length} blocages créés`);
-
-    console.log('\n🎉 Seed terminé avec succès !');
-    
-    // 9. Afficher un résumé complet
-    const finalUserCount = await prisma.user.count();
-    const finalLikeCount = await prisma.like.count();
-    const finalDislikeCount = await prisma.dislike.count();
-    const finalProfileViewCount = await prisma.profileView.count();
-    const finalBlockCount = await prisma.block.count();
-    const finalPhotoCount = await prisma.photo.count();
-    const finalPreferencesCount = await prisma.userPreferences.count();
-    const finalNotificationSettingsCount = await prisma.notificationSettings.count();
-    const verifiedEmailCount = await prisma.user.count({
-      where: { emailVerified: { not: null } }
-    });
-    
-    // Calculer les vraies statistiques des matchs
-    const realMatches = await prisma.$queryRaw<Array<{count: bigint}>>`
-      SELECT COUNT(*) as count
-      FROM (
-        SELECT DISTINCT l1."senderId", l1."receiverId"
-        FROM "likes" l1
-        INNER JOIN "likes" l2 ON l1."senderId" = l2."receiverId" AND l1."receiverId" = l2."senderId"
-        WHERE l1."senderId" < l1."receiverId"
-      ) as matches
-    `;
-    
-    const matchCount = Number(realMatches[0].count);
-    
-    console.log('\n📊 Résumé de la base PostgreSQL :');
-    console.log(`   👥 Utilisateurs: ${finalUserCount}`);
-    console.log(`   ✉️ Emails vérifiés: ${verifiedEmailCount}/${finalUserCount}`);
-    console.log(`   ❤️ Likes: ${finalLikeCount}`);
-    console.log(`   👎 Dislikes: ${finalDislikeCount}`);
-    console.log(`   💕 Matchs (likes réciproques): ${matchCount}`);
-    console.log(`   👀 Vues de profil: ${finalProfileViewCount}`);
-    console.log(`   🚫 Blocages: ${finalBlockCount}`);
-    console.log(`   📸 Photos: ${finalPhotoCount}`);
-    console.log(`   ⚙️ Préférences utilisateur: ${finalPreferencesCount}`);
-    console.log(`   🔔 Paramètres de notification: ${finalNotificationSettingsCount}`);
-    
-    // Afficher quelques utilisateurs exemples
-    const exampleUsers = await prisma.user.findMany({
-      take: 5,
-      orderBy: { createdAt: 'asc' }
-    });
-    
-    console.log('\n🔐 Informations de connexion :');
-    console.log(`   📧 Exemples d'emails :`);
-    exampleUsers.forEach((user, index) => {
-      console.log(`      ${index + 1}. ${user.email}`);
-    });
-    console.log(`   🔑 Mot de passe: "${defaultPassword}" (pour tous les utilisateurs)`);
-    console.log(`   ✅ Tous les emails sont pré-vérifiés`);
-    
-    console.log('\n✨ Base de données prête pour les tests !');
-
-  } catch (error) {
-    console.error('❌ Erreur lors du seed:', error);
-    throw error;
-  }
-}
-
-main()
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
+  // États pour les paramètres de notification (basés sur le schéma)
+  const [notificationSettings, setNotificationSettings] = useState({
+    messageNotifications: true,
+    likeNotifications: true,
+    matchNotifications: true
   });
+
+  // ✅ Vérifier si le compte est suspendu - VERSION AMÉLIORÉE AVEC DEBUG
+  const accountStatus = profile?.accountStatus?.toString().toUpperCase();
+  const isAccountSuspended = accountStatus === 'SUSPENDED' || accountStatus === 'BANNED';
+  const isAccountActive = accountStatus === 'ACTIVE';
+  
+  // Debug pour comprendre le problème
+  console.log('🔍 Debug statut compte DÉTAILLÉ:', {
+    rawAccountStatus: profile?.accountStatus,
+    accountStatusString: accountStatus,
+    isAccountSuspended,
+    isAccountActive,
+    isSuspending,
+    profileId: profile?.id,
+    profileEmail: profile?.email,
+    profileObject: profile
+  });
+
+  // ✅ Utilisation du hook pour la réactivation seulement
+  const { reactivateAccount, isLoading: hookIsLoading } = useAccountSuspension();
+
+  // Charger les paramètres de notification existants
+  useEffect(() => {
+    const loadNotificationSettings = async () => {
+      try {
+        const response = await fetch('/api/user/notification-settings');
+        if (response.ok) {
+          const settings = await response.json();
+          setNotificationSettings(prev => ({
+            ...prev,
+            ...settings
+          }));
+        }
+      } catch (error) {
+        console.error('Erreur chargement paramètres notifications:', error);
+      }
+    };
+
+    if (profile?.id) {
+      loadNotificationSettings();
+    }
+  }, [profile?.id]);
+
+  // Sauvegarder les paramètres de notification
+  const updateNotificationSettings = async (newSettings: Partial<typeof notificationSettings>) => {
+    try {
+      const updatedSettings = { ...notificationSettings, ...newSettings };
+      setNotificationSettings(updatedSettings);
+
+      const response = await fetch('/api/user/notification-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedSettings)
+      });
+
+      if (!response.ok) {
+        throw new Error('Erreur sauvegarde paramètres');
+      }
+
+      onMessage('Paramètres mis à jour avec succès', 'success');
+    } catch (error) {
+      console.error('Erreur mise à jour paramètres:', error);
+      onMessage('Erreur lors de la mise à jour des paramètres', 'error');
+      // Revenir à l'ancien état en cas d'erreur
+      setNotificationSettings(prev => ({ ...prev, ...Object.fromEntries(
+        Object.entries(newSettings).map(([key, value]) => [key, !value])
+      )}));
+    }
+  };
+
+  const suspendReasons = [
+    { value: 'break', label: 'Pause temporaire' },
+    { value: 'privacy', label: 'Préoccupations de confidentialité' },
+    { value: 'found_match', label: 'J\'ai trouvé quelqu\'un' },
+    { value: 'too_busy', label: 'Trop occupé(e) actuellement' },
+    { value: 'rethinking', label: 'Je repense à mes objectifs' },
+    { value: 'other', label: 'Autre raison' }
+  ];
+
+  // 🔧 FONCTION DE NETTOYAGE COMPLÈTE DES COOKIES ET STORAGE
+  const clearAllUserData = async () => {
+    try {
+      console.log('🧹 Nettoyage complet des données utilisateur...');
+      
+      // 1. Nettoyer le localStorage
+      if (typeof window !== 'undefined') {
+        localStorage.clear();
+        sessionStorage.clear();
+        console.log('✅ Storage nettoyé');
+      }
+      
+      // 2. Supprimer manuellement tous les cookies
+      if (typeof document !== 'undefined') {
+        const cookies = document.cookie.split(";");
+        
+        for (let cookie of cookies) {
+          const eqPos = cookie.indexOf("=");
+          const name = eqPos > -1 ? cookie.substr(0, eqPos).trim() : cookie.trim();
+          
+          // Supprimer le cookie sur différents domaines et paths
+          document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;`;
+          document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=${window.location.hostname};`;
+          document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=.${window.location.hostname};`;
+        }
+        console.log('✅ Cookies nettoyés');
+      }
+      
+      // 3. Déconnexion NextAuth
+      await signOut({ 
+        redirect: false, // Empêcher la redirection automatique
+        callbackUrl: '/' // URL de callback après déconnexion
+      });
+      console.log('✅ Session NextAuth fermée');
+      
+    } catch (error) {
+      console.error('❌ Erreur lors du nettoyage:', error);
+    }
+  };
+
+  // 🔧 FONCTION DE SUSPENSION SIMPLIFIÉE AVEC APPEL DIRECT À L'API
+  const handleSuspendAccount = async () => {
+    if (isSuspending) {
+      console.log('⚠️ Suspension déjà en cours, ignoré');
+      return;
+    }
+
+    const currentReason = suspendReason;
+    setIsSuspending(true);
+    
+    try {
+      console.log('🔄 Début suspension avec déconnexion automatique:', { reason: currentReason });
+      
+      setShowSuspendModal(false);
+      setSuspendReason('');
+      
+      onMessage('Suspension du compte en cours...', 'info');
+      
+      const response = await fetch('/api/user/suspend-account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: currentReason }),
+      });
+
+      const result = await response.json();
+      console.log('📤 Réponse API suspension:', result);
+
+      if (!response.ok) {
+        if (response.status === 400 && result.suggestion === 'reactivate') {
+          throw new Error(`${result.message} Utilisez le bouton "Réactiver" à la place.`);
+        }
+        
+        if (response.status === 401) {
+          throw new Error('Session expirée. Veuillez vous reconnecter.');
+        }
+        
+        if (response.status === 404) {
+          throw new Error('Utilisateur introuvable. Veuillez vous reconnecter.');
+        }
+        
+        throw new Error(result.message || result.error || 'Erreur lors de la suspension');
+      }
+
+      console.log('✅ Suspension API réussie, début de la déconnexion...');
+      
+      onMessage('Compte suspendu avec succès. Déconnexion en cours...', 'success');
+      
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      await clearAllUserData();
+      
+      console.log('🔄 Redirection vers la racine...');
+      window.location.href = '/';
+      
+    } catch (error) {
+      console.error('❌ Erreur suspension:', error);
+      
+      setIsSuspending(false);
+      setShowSuspendModal(true);
+      setSuspendReason(currentReason);
+      
+      onMessage(
+        error instanceof Error ? error.message : 'Erreur lors de la suspension du compte', 
+        'error'
+      );
+    }
+  };
+
+  // ✅ FONCTION DE RÉACTIVATION (utilise le hook)
+  const handleReactivateAccount = async () => {
+    try {
+      console.log('🔄 Début réactivation avec hook');
+      
+      setShowReactivateModal(false);
+      
+      await reactivateAccount();
+      
+      onMessage('Votre compte a été réactivé avec succès ! Actualisation...', 'success');
+      
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
+      
+    } catch (error) {
+      console.error('❌ Erreur réactivation via hook:', error);
+      onMessage(error instanceof Error ? error.message : 'Erreur lors de la réactivation du compte', 'error');
+    }
+  };
+
+  // 🔧 FONCTION DE SUPPRESSION AMÉLIORÉE AVEC DÉCONNEXION SIMILAIRE
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmation !== 'SUPPRIMER') {
+      onMessage('Veuillez taper "SUPPRIMER" pour confirmer', 'error');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      let currentUserId = profile?.id;
+      let currentUserEmail = profile?.email;
+      
+      if (!currentUserId && session?.user) {
+        currentUserId = session.user.id || (session.user as any).sub || (session.user as any).userId;
+        currentUserEmail = session.user.email || undefined;
+      }
+      
+      if (!currentUserId && !currentUserEmail) {
+        onMessage('Erreur: Session invalide. Veuillez vous reconnecter.', 'error');
+        return;
+      }
+      
+      setShowDeleteModal(false);
+      setDeleteConfirmation('');
+      
+      const response = await fetch('/api/user/delete-account', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          forceUserId: currentUserId,
+          forceUserEmail: currentUserEmail 
+        })
+      });
+
+      if (response.ok) {
+        onMessage('Compte supprimé avec succès. Déconnexion...', 'success');
+        
+        setTimeout(async () => {
+          await clearAllUserData();
+          window.location.href = '/';
+        }, 2000);
+      } else {
+        throw new Error('Erreur lors de la suppression');
+      }
+    } catch (error) {
+      onMessage('Erreur lors de la suppression du compte', 'error');
+      setLoading(false);
+      setShowDeleteModal(true);
+    }
+  };
+
+  return (
+    <div className="p-6">
+      {/* ✅ BANNIÈRE - Alerte si compte suspendu ou banni */}
+      {isAccountSuspended && (
+        <div className={`border-l-4 p-4 rounded-r-lg mb-6 ${
+          profile?.accountStatus === 'BANNED' 
+            ? 'bg-red-100 border-red-500' 
+            : 'bg-orange-100 border-orange-500'
+        }`}>
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <ExclamationTriangleIcon className={`h-5 w-5 ${
+                profile?.accountStatus === 'BANNED' ? 'text-red-500' : 'text-orange-500'
+              }`} />
+            </div>
+            <div className="ml-3">
+              <p className={`text-sm ${
+                profile?.accountStatus === 'BANNED' ? 'text-red-700' : 'text-orange-700'
+              }`}>
+                <strong>
+                  {profile?.accountStatus === 'BANNED' 
+                    ? 'Votre compte est banni.' 
+                    : 'Votre compte est suspendu.'
+                  }
+                </strong> 
+                {profile?.accountStatus === 'BANNED'
+                  ? ' Votre accès à la plateforme a été restreint. Contactez le support pour plus d\'informations.'
+                  : ' Votre profil n\'est pas visible et vous ne recevez plus de notifications. Vous pouvez le réactiver ci-dessous dans la zone de danger.'
+                }
+              </p>
+              <p className={`text-xs mt-1 ${
+                profile?.accountStatus === 'BANNED' ? 'text-red-600' : 'text-orange-600'
+              }`}>
+                Statut actuel: {profile?.accountStatus || 'Non défini'}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🔍 DEBUG - Section temporaire pour diagnostiquer */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="bg-blue-100 border border-blue-300 p-4 rounded-lg mb-6">
+          <h3 className="font-medium text-blue-800 mb-2">🔍 Debug Info Détaillé</h3>
+          <div className="text-sm text-blue-700 space-y-1">
+            <div>Profile ID: {profile?.id || 'Non défini'}</div>
+            <div>Raw Account Status: "{profile?.accountStatus}" (type: {typeof profile?.accountStatus})</div>
+            <div>Normalized Status: "{accountStatus}"</div>
+            <div>Is Suspended: {isAccountSuspended ? 'OUI' : 'NON'}</div>
+            <div>Is Active: {isAccountActive ? 'OUI' : 'NON'}</div>
+            <div>Is Suspending State: {isSuspending ? 'OUI' : 'NON'}</div>
+            <div>Session User ID: {session?.user?.id || 'Non défini'}</div>
+            <div>Email: {profile?.email || session?.user?.email || 'Non défini'}</div>
+            <div className="pt-2 border-t border-blue-300 mt-2">
+              <strong>Logique des boutons:</strong>
+              <div>• Devrait afficher "Réactiver": {accountStatus === 'SUSPENDED' ? 'OUI' : 'NON'}</div>
+              <div>• Devrait afficher "Banni": {accountStatus === 'BANNED' ? 'OUI' : 'NON'}</div>
+              <div>• Devrait afficher "Suspendre": {isAccountActive && !isSuspending ? 'OUI' : 'NON'}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <h2 className="text-2xl font-bold text-gray-800 mb-6">
+        Paramètres du compte
+      </h2>
+      
+      <div className="space-y-6">
+        {/* Informations du compte */}
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <div className="flex items-center mb-4">
+            <UserCircleIcon className="w-6 h-6 text-blue-600 mr-3" />
+            <h3 className="text-lg font-semibold text-gray-800">
+              Informations du compte
+            </h3>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-3">
+              <div>
+                <div className="text-sm font-medium text-gray-500">Email</div>
+                <div className="text-gray-800">{profile?.email}</div>
+              </div>
+              <div>
+                <div className="text-sm font-medium text-gray-500">Membre depuis</div>
+                <div className="text-gray-800">
+                  {profile?.createdAt ? new Date(profile.createdAt).toLocaleDateString('fr-FR', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                  }) : 'N/A'}
+                </div>
+              </div>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <div className="text-sm font-medium text-gray-500">Dernière mise à jour</div>
+                <div className="text-gray-800">
+                  {profile?.updatedAt ? new Date(profile.updatedAt).toLocaleDateString('fr-FR', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                  }) : 'N/A'}
+                </div>
+              </div>
+              <div>
+                <div className="text-sm font-medium text-gray-500">Nombre de photos</div>
+                <div className="text-gray-800">{photos.length}/6</div>
+              </div>
+              <div>
+                <div className="text-sm font-medium text-gray-500">Statut du compte</div>
+                <div className={`text-gray-800 flex items-center ${isAccountSuspended ? 'text-orange-600' : 'text-green-600'}`}>
+                  <div className={`w-2 h-2 rounded-full mr-2 ${isAccountSuspended ? 'bg-orange-500' : 'bg-green-500'}`}></div>
+                  {isAccountSuspended ? 'Suspendu' : 'Actif'}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Paramètres de confidentialité */}
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <div className="flex items-center mb-4">
+            <ShieldCheckIcon className="w-6 h-6 text-green-600 mr-3" />
+            <h3 className="text-lg font-semibold text-gray-800">
+              Confidentialité et sécurité
+            </h3>
+          </div>
+          
+          <div className="space-y-4">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <p className="text-sm text-blue-700">
+                <strong>Note:</strong> Les paramètres de confidentialité avancés seront bientôt disponibles. 
+                Pour l'instant, votre profil est visible par défaut aux autres utilisateurs connectés.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Paramètres de notifications - BASÉS SUR LE SCHÉMA */}
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <div className="flex items-center mb-4">
+            <BellIcon className="w-6 h-6 text-yellow-600 mr-3" />
+            <h3 className="text-lg font-semibold text-gray-800">
+              Paramètres de notifications
+            </h3>
+          </div>
+          
+          <div className="space-y-4">
+            <label className="flex items-start space-x-3">
+              <input 
+                type="checkbox" 
+                checked={notificationSettings.messageNotifications}
+                onChange={(e) => updateNotificationSettings({ messageNotifications: e.target.checked })}
+                className="mt-1 h-4 w-4 text-pink-600 focus:ring-pink-500 border-gray-300 rounded" 
+              />
+              <div>
+                <div className="font-medium text-gray-800">Notifications de messages</div>
+                <div className="text-sm text-gray-600">
+                  Recevoir une notification pour chaque nouveau message
+                </div>
+              </div>
+            </label>
+            
+            <label className="flex items-start space-x-3">
+              <input 
+                type="checkbox" 
+                checked={notificationSettings.likeNotifications}
+                onChange={(e) => updateNotificationSettings({ likeNotifications: e.target.checked })}
+                className="mt-1 h-4 w-4 text-pink-600 focus:ring-pink-500 border-gray-300 rounded" 
+              />
+              <div>
+                <div className="font-medium text-gray-800">Notifications de likes</div>
+                <div className="text-sm text-gray-600">
+                  Recevoir une notification quand quelqu'un like votre profil
+                </div>
+              </div>
+            </label>
+            
+            <label className="flex items-start space-x-3">
+              <input 
+                type="checkbox" 
+                checked={notificationSettings.matchNotifications}
+                onChange={(e) => updateNotificationSettings({ matchNotifications: e.target.checked })}
+                className="mt-1 h-4 w-4 text-pink-600 focus:ring-pink-500 border-gray-300 rounded" 
+              />
+              <div>
+                <div className="font-medium text-gray-800">Notifications de matchs</div>
+                <div className="text-sm text-gray-600">
+                  Recevoir une notification pour chaque nouveau match
+                </div>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        {/* ✅ ZONE DE DANGER RÉORGANISÉE - BOUTONS AU MÊME NIVEAU */}
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+          <div className="flex items-center mb-4">
+            <ExclamationTriangleIcon className="w-6 h-6 text-red-600 mr-3" />
+            <h3 className="text-lg font-semibold text-red-800">
+              Zone de danger
+            </h3>
+          </div>
+          
+          <div className="mb-4">
+            <p className="text-sm text-red-700 mb-6">
+              Ces actions sont importantes. Réfléchissez bien avant de continuer.
+            </p>
+            
+            {/* BOUTONS AU MÊME NIVEAU - LOGIQUE CORRIGÉE */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Bouton Suspension/Réactivation - LOGIQUE SIMPLIFIÉE ET ROBUSTE */}
+              {(() => {
+                console.log('🎯 Rendu bouton - État:', { accountStatus, isAccountActive, isSuspending });
+                
+                if (accountStatus === 'SUSPENDED') {
+                  return (
+                    <button
+                      onClick={() => {
+                        console.log('🔄 Clic réactivation');
+                        setShowReactivateModal(true);
+                      }}
+                      disabled={hookIsLoading}
+                      className="flex items-center justify-center px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                    >
+                      {hookIsLoading ? (
+                        <div className="flex items-center">
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                          Réactivation...
+                        </div>
+                      ) : (
+                        <div className="flex items-center">
+                          <PlayIcon className="w-5 h-5 mr-2" />
+                          Réactiver mon compte
+                        </div>
+                      )}
+                    </button>
+                  );
+                } else if (accountStatus === 'BANNED') {
+                  return (
+                    <div className="flex items-center justify-center px-4 py-3 bg-red-500 text-white rounded-lg cursor-not-allowed">
+                      <div className="flex items-center">
+                        <LockClosedIcon className="w-5 h-5 mr-2" />
+                        Compte banni - Contactez le support
+                      </div>
+                    </div>
+                  );
+                } else if (isAccountActive) {
+                  return (
+                    <button
+                      onClick={() => {
+                        console.log('🔄 Clic suspension - État:', { isSuspending });
+                        if (!isSuspending) {
+                          setShowSuspendModal(true);
+                        }
+                      }}
+                      disabled={isSuspending}
+                      className="flex items-center justify-center px-4 py-3 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors disabled:opacity-50"
+                    >
+                      {isSuspending ? (
+                        <div className="flex items-center">
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                          Suspension...
+                        </div>
+                      ) : (
+                        <div className="flex items-center">
+                          <PauseIcon className="w-5 h-5 mr-2" />
+                          Suspendre mon compte
+                        </div>
+                      )}
+                    </button>
+                  );
+                } else {
+                  return (
+                    <div className="flex items-center justify-center px-4 py-3 bg-gray-400 text-white rounded-lg cursor-not-allowed">
+                      <div className="flex items-center">
+                        <LockClosedIcon className="w-5 h-5 mr-2" />
+                        Statut: {accountStatus || 'Inconnu'}
+                      </div>
+                    </div>
+                  );
+                }
+              })()}
+
+              {/* Bouton Suppression */}
+              <button 
+                onClick={() => setShowDeleteModal(true)}
+                className="flex items-center justify-center px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              >
+                <XMarkIcon className="w-5 h-5 mr-2" />
+                Supprimer mon compte
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ✅ MODALE DE RÉACTIVATION */}
+      <AnimatePresence>
+        {showReactivateModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                setShowReactivateModal(false);
+              }
+            }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6"
+            >
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <PlayIcon className="w-8 h-8 text-green-600" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">
+                  Réactiver votre compte ?
+                </h3>
+                <p className="text-gray-600">
+                  Votre profil redeviendra visible et vous recommencerez à recevoir des notifications.
+                </p>
+              </div>
+
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+                <h4 className="font-medium text-green-800 mb-3">
+                  ✅ Après réactivation :
+                </h4>
+                <ul className="text-sm text-green-700 space-y-1">
+                  <li>• Votre profil sera à nouveau visible</li>
+                  <li>• Vous pourrez envoyer et recevoir des messages</li>
+                  <li>• Les notifications seront réactivées</li>
+                  <li>• Vous pourrez voir de nouveaux profils</li>
+                </ul>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowReactivateModal(false)}
+                  className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={handleReactivateAccount}
+                  disabled={hookIsLoading}
+                  className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors flex items-center justify-center"
+                >
+                  {hookIsLoading ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                      Réactivation...
+                    </>
+                  ) : (
+                    <>
+                      <PlayIcon className="w-4 h-4 mr-2" />
+                      Réactiver
+                    </>
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ✅ MODALE DE SUSPENSION */}
+      <AnimatePresence>
+        {showSuspendModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                setShowSuspendModal(false);
+              }
+            }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6"
+            >
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <PauseIcon className="w-8 h-8 text-orange-600" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">
+                  Suspendre votre compte ?
+                </h3>
+                <p className="text-gray-600">
+                  Votre compte sera suspendu et vous serez automatiquement déconnecté.
+                </p>
+              </div>
+
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                <h4 className="font-medium text-red-800 mb-3 flex items-center gap-2">
+                  ⚠️ Déconnexion automatique
+                </h4>
+                <ul className="text-sm text-red-700 space-y-1">
+                  <li>• Vous serez immédiatement déconnecté</li>
+                  <li>• Vos cookies de session seront supprimés</li>
+                  <li>• Vous serez redirigé vers la page d'accueil</li>
+                  <li>• Pour vous reconnecter, utilisez vos identifiants habituels</li>
+                </ul>
+              </div>
+
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-6">
+                <h4 className="font-medium text-orange-800 mb-3">
+                  ⏸️ Pendant la suspension :
+                </h4>
+                <ul className="text-sm text-orange-700 space-y-1">
+                  <li>• Votre profil ne sera plus visible par les autres</li>
+                  <li>• Vous ne recevrez plus de notifications</li>
+                  <li>• Vos conversations seront préservées</li>
+                  <li>• Vous ne pourrez pas envoyer/recevoir de messages</li>
+                  <li>• Vous pourrez réactiver votre compte en vous reconnectant</li>
+                </ul>
+              </div>
+
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Raison de la suspension (optionnel) :
+                </label>
+                <select
+                  value={suspendReason}
+                  onChange={(e) => setSuspendReason(e.target.value)}
+                  disabled={isSuspending}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                >
+                  <option value="">Sélectionnez une raison</option>
+                  {suspendReasons.map((reason) => (
+                    <option key={reason.value} value={reason.value}>
+                      {reason.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowSuspendModal(false);
+                    setSuspendReason('');
+                  }}
+                  disabled={isSuspending}
+                  className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={handleSuspendAccount}
+                  disabled={isSuspending}
+                  className="flex-1 px-4 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+                >
+                  {isSuspending ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                      Suspension...
+                    </>
+                  ) : (
+                    <>
+                      <PauseIcon className="w-4 h-4 mr-2" />
+                      Suspendre
+                    </>
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* MODALE DE SUPPRESSION */}
+      <AnimatePresence>
+        {showDeleteModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+            onClick={(e) => e.target === e.currentTarget && setShowDeleteModal(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6"
+            >
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <ExclamationTriangleIcon className="w-8 h-8 text-red-600" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">
+                  Supprimer définitivement votre compte ?
+                </h3>
+                <p className="text-gray-600">
+                  Cette action est irréversible et supprimera toutes vos données.
+                </p>
+              </div>
+
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+                <h4 className="font-medium text-red-800 mb-3">
+                  🗑️ Sera supprimé définitivement :
+                </h4>
+                <ul className="text-sm text-red-700 space-y-1">
+                  <li>• Votre profil et toutes vos informations personnelles</li>
+                  <li>• Toutes vos photos ({photos.length} photo{photos.length !== 1 ? 's' : ''})</li>
+                  <li>• Tous vos messages et conversations</li>
+                  <li>• Tous vos likes donnés et reçus</li>
+                  <li>• Tous vos matches actuels</li>
+                  <li>• Votre historique d'activité</li>
+                  <li>• Vos préférences de recherche</li>
+                </ul>
+              </div>
+
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Pour confirmer, tapez <span className="font-bold text-red-600">SUPPRIMER</span> ci-dessous :
+                </label>
+                <input
+                  type="text"
+                  value={deleteConfirmation}
+                  onChange={(e) => setDeleteConfirmation(e.target.value)}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  placeholder="Tapez SUPPRIMER"
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowDeleteModal(false);
+                    setDeleteConfirmation('');
+                  }}
+                  className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={handleDeleteAccount}
+                  disabled={loading || deleteConfirmation !== 'SUPPRIMER'}
+                  className="flex-1 px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {loading ? 'Suppression...' : 'Supprimer définitivement'}
+                </button>
+              </div>
+
+              <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-xs text-yellow-700 text-center">
+                  ⚠️ Cette action ne peut pas être annulée. Toutes vos données seront perdues à jamais.
+                </p>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+export default SettingsPanel;

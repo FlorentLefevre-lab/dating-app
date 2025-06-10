@@ -200,10 +200,6 @@ model NotificationSettings {
   messageNotifications Boolean  @default(true)
   likeNotifications    Boolean  @default(true)
   matchNotifications   Boolean  @default(true)
-  soundEnabled         Boolean  @default(true)
-  vibrationEnabled     Boolean  @default(true)
-  quietHoursStart      String?
-  quietHoursEnd        String?
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 

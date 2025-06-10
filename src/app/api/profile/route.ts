@@ -1,4 +1,4 @@
-// src/app/api/profile/route.ts - Version avec mapping français → Prisma
+// src/app/api/profile/route.ts - Version corrigée avec accountStatus
 
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '../../../auth';
@@ -127,7 +127,7 @@ export async function PUT(request: NextRequest) {
 
     console.log('✅ Utilisateur mis à jour avec succès');
 
-    // 🔄 Retourner les données avec mapping inverse (français)
+    // ✅ CORRECTION : Retourner les données avec accountStatus inclus
     const responseData = {
       id: updatedUser.id,
       email: updatedUser.email,
@@ -145,9 +145,17 @@ export async function PUT(request: NextRequest) {
       interests: updatedUser.interests,
       photos: updatedUser.photos,
       preferences: updatedUser.preferences,
+      accountStatus: updatedUser.accountStatus, // ✅ AJOUT CRUCIAL
       createdAt: updatedUser.createdAt,
       updatedAt: updatedUser.updatedAt
     };
+
+    // 🔍 LOG pour debugging
+    console.log('📤 Données renvoyées au frontend (PUT):', {
+      userId: responseData.id,
+      accountStatus: responseData.accountStatus,
+      typeAccountStatus: typeof responseData.accountStatus
+    });
 
     return NextResponse.json(responseData);
 
@@ -188,7 +196,7 @@ export async function GET(request: NextRequest) {
 
     console.log('✅ Profil récupéré avec succès');
 
-    // 🔄 Retourner les données avec mapping inverse (français)
+    // ✅ CORRECTION : Retourner les données avec accountStatus inclus
     const responseData = {
       id: user.id,
       email: user.email,
@@ -206,9 +214,18 @@ export async function GET(request: NextRequest) {
       interests: user.interests,
       photos: user.photos,
       preferences: user.preferences,
+      accountStatus: user.accountStatus, // ✅ AJOUT CRUCIAL
       createdAt: user.createdAt,
       updatedAt: user.updatedAt
     };
+
+    // 🔍 LOG pour debugging
+    console.log('📤 Données renvoyées au frontend (GET):', {
+      userId: responseData.id,
+      accountStatus: responseData.accountStatus,
+      typeAccountStatus: typeof responseData.accountStatus,
+      rawAccountStatusFromDB: user.accountStatus
+    });
 
     return NextResponse.json(responseData);
 

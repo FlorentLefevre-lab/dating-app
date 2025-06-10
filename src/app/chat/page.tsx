@@ -4,7 +4,7 @@
 
 import { Suspense } from 'react';
 import AuthGuard  from '@/components/auth/AuthGuard';
-import DatingApp from '@/components/DatingApp';
+import DatingApp from '@/components/chat/DatingApp';
 
 function ChatPageContent() {
   return (
