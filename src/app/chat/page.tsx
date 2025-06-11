@@ -1,7 +1,8 @@
-// src/app/chat/page.tsx - Version optimisée avec hooks refactorisés
+// src/app/chat/page.tsx - VERSION SANS REDIS (cache client uniquement)
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
+
 import {
   Chat,
   ChannelList,
@@ -12,12 +13,14 @@ import {
   Thread,
   Avatar
 } from 'stream-chat-react';
+
 import 'stream-chat-react/dist/css/v2/index.css';
-import AuthGuard from '../../components/auth/AuthGuard';
-import { useStream } from '../../hooks/useStream';
-import { useAuth } from '../../hooks/useAuth';
-import { useApiWithCache } from '../../hooks/useApiWithCache';
-import { clientCache } from '../../lib/cache';
+
+import AuthGuard from '@/components/auth/AuthGuard';
+import { useStream } from '@/hooks/useStream';
+import { useAuth } from '@/hooks/useAuth';
+import { useApiWithCache } from '@/hooks/useApiWithCache';
+import { clientCache } from '@/lib/clientCache'; 
 
 // Custom styles optimisés
 const customStyles = `
@@ -310,17 +313,19 @@ export default function ChatPage() {
     if (!chatClient) return;
 
     const handleNewMessage = (event: any) => {
-      // Invalider le cache des stats pour mettre à jour les compteurs
-      clientCache.invalidate('chat-stats');
+      // ✅ Utiliser le cache client au lieu de Redis
+      clientCache.invalidatePattern('chat-stats');
       
       // Notification browser si l'onglet n'est pas visible
       if (document.hidden && event.message?.user?.id !== session?.user?.id) {
-        const notification = new Notification('Nouveau message', {
-          body: event.message?.text || 'Vous avez reçu un nouveau message',
-          icon: '/default-avatar.png'
-        });
-        
-        setTimeout(() => notification.close(), 5000);
+        if ('Notification' in window && Notification.permission === 'granted') {
+          const notification = new Notification('Nouveau message', {
+            body: event.message?.text || 'Vous avez reçu un nouveau message',
+            icon: '/default-avatar.png'
+          });
+          
+          setTimeout(() => notification.close(), 5000);
+        }
       }
     };
 

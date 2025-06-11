@@ -1,16 +1,21 @@
+// lib/email.ts - Gestion des emails avec cache Redis
 import nodemailer from 'nodemailer'
+import { cache, emailCache } from './cache'
 
-const transporter = nodemailer.createTransport({
+const transporter = nodemailer.createTransporter({
   host: process.env.EMAIL_SERVER_HOST,
   port: parseInt(process.env.EMAIL_SERVER_PORT || '587'),
-  secure: false, // true pour 465, false pour les autres ports
+  secure: false,
   auth: {
     user: process.env.EMAIL_SERVER_USER,
     pass: process.env.EMAIL_SERVER_PASSWORD,
   },
 })
 
-export async function sendPasswordResetEmail(email: string, token: string) {
+export async function sendPasswordResetEmail(email: string, token: string): Promise<{ 
+  success: boolean; 
+  message?: string; 
+}> {
   const resetUrl = `${process.env.NEXTAUTH_URL}/auth/reset-password?token=${token}`
 
   const mailOptions = {
@@ -50,15 +55,20 @@ export async function sendPasswordResetEmail(email: string, token: string) {
 
   try {
     await transporter.sendMail(mailOptions)
+    await emailCache.set(email, token)
+    
     console.log('📧 Email de réinitialisation envoyé à:', email)
-    return true
+    return { success: true, message: 'Email de réinitialisation envoyé avec succès' }
   } catch (error) {
     console.error('❌ Erreur envoi email:', error)
-    return false
+    return { success: false, message: 'Erreur lors de l\'envoi de l\'email' }
   }
 }
 
-export async function sendEmailVerification(email: string, token: string) {
+export async function sendEmailVerification(email: string, token: string): Promise<{ 
+  success: boolean; 
+  message?: string; 
+}> {
   const verifyUrl = `${process.env.NEXTAUTH_URL}/auth/verify-email?token=${token}`
 
   const mailOptions = {
@@ -98,10 +108,50 @@ export async function sendEmailVerification(email: string, token: string) {
 
   try {
     await transporter.sendMail(mailOptions)
+    await cache.set(`verification:${email}`, token, { prefix: 'email_tokens:', ttl: 86400 })
+    
     console.log('📧 Email de vérification envoyé à:', email)
-    return true
+    return { success: true, message: 'Email de vérification envoyé avec succès' }
   } catch (error) {
     console.error('❌ Erreur envoi email vérification:', error)
+    return { success: false, message: 'Erreur lors de l\'envoi de l\'email' }
+  }
+}
+
+export async function validatePasswordResetToken(email: string, token: string): Promise<boolean> {
+  try {
+    const cachedToken = await emailCache.get(email)
+    const isValid = cachedToken === token
+    
+    if (isValid) {
+      await emailCache.delete(email)
+      console.log('✅ Token de réinitialisation validé et supprimé:', email)
+    } else {
+      console.log('❌ Token de réinitialisation invalide:', email)
+    }
+    
+    return isValid
+  } catch (error) {
+    console.error('❌ Erreur validation token:', error)
+    return false
+  }
+}
+
+export async function validateEmailVerificationToken(email: string, token: string): Promise<boolean> {
+  try {
+    const cachedToken = await cache.get(`verification:${email}`, { prefix: 'email_tokens:' })
+    const isValid = cachedToken === token
+    
+    if (isValid) {
+      await cache.delete(`verification:${email}`, { prefix: 'email_tokens:' })
+      console.log('✅ Token de vérification email validé et supprimé:', email)
+    } else {
+      console.log('❌ Token de vérification email invalide:', email)
+    }
+    
+    return isValid
+  } catch (error) {
+    console.error('❌ Erreur validation token email:', error)
     return false
   }
 }

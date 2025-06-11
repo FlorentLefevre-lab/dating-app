@@ -24,13 +24,11 @@ export default function RootLayout({
       <body className={inter.className}>
           <SessionProvider>
             {/* Contenu principal */}
-              <QueryProvider>
                 {/* Navbar conditionnelle basée sur la route et l'authentification */}
                 <Navbar />
                 <main>
                   {children}
                 </main>
-              </QueryProvider>       
           </SessionProvider>
       </body>
     </html>

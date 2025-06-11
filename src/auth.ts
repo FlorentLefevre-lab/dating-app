@@ -1,13 +1,23 @@
-// src/auth.ts - Configuration NextAuth v5 corrigée
+// src/auth.ts - Configuration NextAuth v5 avec cache Redis - CORRIGÉ
 import NextAuth from "next-auth"
 import GoogleProvider from "next-auth/providers/google"
 import FacebookProvider from "next-auth/providers/facebook"
 import CredentialsProvider from "next-auth/providers/credentials"
 import { PrismaAdapter } from "@auth/prisma-adapter"
 import { prisma } from "./lib/db"
+import { cache, userCache, sessionCache } from "./lib/cache"
 import bcrypt from "bcryptjs"
 
-// ✅ CORRECTION: Créer la configuration d'abord
+interface CachedUser {
+  id: string
+  email: string
+  name: string | null
+  image: string | null
+  hashedPassword: string | null
+  emailVerified: Date | null
+  provider?: string
+}
+
 const authConfig = {
   adapter: PrismaAdapter(prisma),
   
@@ -35,13 +45,33 @@ const authConfig = {
         }
 
         try {
-          const user = await prisma.user.findUnique({
-            where: { email: credentials.email }
-          })
-
+          let user = await userCache.get(credentials.email)
+          
           if (!user) {
-            console.log("❌ Utilisateur non trouvé:", credentials.email)
-            return null
+            console.log("📦 Cache MISS - Requête DB pour:", credentials.email)
+            
+            const dbUser = await prisma.user.findUnique({
+              where: { email: credentials.email },
+              select: {
+                id: true,
+                email: true,
+                name: true,
+                image: true,
+                hashedPassword: true,
+                emailVerified: true
+              }
+            })
+
+            if (!dbUser) {
+              console.log("❌ Utilisateur non trouvé:", credentials.email)
+              return null
+            }
+
+            user = dbUser as CachedUser
+            await userCache.set(credentials.email, user)
+            console.log("📦 Utilisateur mis en cache:", credentials.email)
+          } else {
+            console.log("📦 Cache HIT pour utilisateur:", credentials.email)
           }
 
           if (!user.hashedPassword) {
@@ -93,11 +123,10 @@ const authConfig = {
 
   session: {
     strategy: "jwt" as const,
-    maxAge: 30 * 24 * 60 * 60, // 30 jours
-    updateAge: 24 * 60 * 60, // 24 heures
+    maxAge: 30 * 24 * 60 * 60,
+    updateAge: 24 * 60 * 60,
   },
 
-  // Configuration des cookies pour NextAuth v5
   cookies: {
     sessionToken: {
       name: process.env.NODE_ENV === 'production' 
@@ -108,7 +137,7 @@ const authConfig = {
         sameSite: 'lax' as const,
         path: '/',
         secure: process.env.NODE_ENV === 'production',
-        maxAge: 30 * 24 * 60 * 60, // 30 jours
+        maxAge: 30 * 24 * 60 * 60,
       },
     },
   },
@@ -120,21 +149,37 @@ const authConfig = {
         token.provider = account?.provider || "credentials"
         
         try {
-          const dbUser = await prisma.user.findUnique({
-            where: { id: user.id },
-            select: { emailVerified: true }
-          })
-          token.emailVerified = dbUser?.emailVerified
+          const userKey = `verification:${user.id}`
+          let emailVerified = await cache.get(userKey, { prefix: 'auth:', ttl: 900 })
+          
+          if (emailVerified === null) {
+            console.log("📦 Cache MISS - Requête DB pour vérification:", user.id)
+            
+            const dbUser = await prisma.user.findUnique({
+              where: { id: user.id },
+              select: { emailVerified: true }
+            })
+            
+            emailVerified = dbUser?.emailVerified || null
+            
+            await cache.set(userKey, emailVerified, { prefix: 'auth:', ttl: 900 })
+            console.log("📦 Statut vérification mis en cache:", user.id)
+          } else {
+            console.log("📦 Cache HIT pour vérification:", user.id)
+          }
+          
+          token.emailVerified = emailVerified
         } catch (error) {
           console.error("❌ Erreur lors de la récupération du statut de vérification:", error)
         }
       }
       
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🔑 JWT Token mis à jour:', {
+      if (token.id) {
+        await sessionCache.set(token.id, {
           userId: token.id,
           email: token.email,
-          provider: token.provider
+          provider: token.provider,
+          lastAccess: new Date()
         })
       }
       
@@ -148,14 +193,6 @@ const authConfig = {
         session.user.emailVerified = token.emailVerified as Date | null
       }
       
-      if (process.env.NODE_ENV === 'development') {
-        console.log('👤 Session créée:', {
-          userId: session.user?.id,
-          email: session.user?.email,
-          provider: session.user?.provider
-        })
-      }
-      
       return session
     },
 
@@ -164,13 +201,33 @@ const authConfig = {
       
       if (account?.provider === "google" || account?.provider === "facebook") {
         try {
-          const existingUser = await prisma.user.findUnique({
-            where: { email: user.email! }
-          })
-
+          let existingUser = await userCache.get(user.email!)
+          
           if (!existingUser) {
-            console.log("❌ Tentative de création de compte OAuth bloquée:", user.email)
-            return `/auth/error?error=OAuthAccountNotLinked&email=${encodeURIComponent(user.email!)}`
+            console.log("📦 Cache MISS - Vérification DB utilisateur OAuth:", user.email)
+            
+            const dbUser = await prisma.user.findUnique({
+              where: { email: user.email! },
+              select: {
+                id: true,
+                email: true,
+                name: true,
+                image: true,
+                hashedPassword: true,
+                emailVerified: true
+              }
+            })
+
+            if (!dbUser) {
+              console.log("❌ Tentative de création de compte OAuth bloquée:", user.email)
+              return `/auth/error?error=OAuthAccountNotLinked&email=${encodeURIComponent(user.email!)}`
+            }
+
+            existingUser = dbUser as CachedUser
+            await userCache.set(user.email!, existingUser)
+            console.log("📦 Utilisateur OAuth mis en cache:", user.email)
+          } else {
+            console.log("📦 Cache HIT pour utilisateur OAuth:", user.email)
           }
 
           const existingAccount = await prisma.account.findFirst({
@@ -195,7 +252,9 @@ const authConfig = {
                 id_token: account.id_token,
               }
             })
-            console.log("✅ Compte OAuth lié:", account.provider)
+            
+            await userCache.delete(user.email!)
+            console.log("✅ Compte OAuth lié et cache invalidé:", account.provider)
           }
         } catch (error) {
           console.error("❌ Erreur lors de la vérification OAuth:", error)
@@ -206,60 +265,8 @@ const authConfig = {
     },
 
     async redirect({ url, baseUrl }) {
-      console.log("🔄 Redirection demandée:", { url, baseUrl })
-      
-      // Gestion de la déconnexion
-      if (url === baseUrl || url === `${baseUrl}/` || url.includes('callbackUrl=%2F')) {
-        console.log("🏠 Déconnexion détectée - redirection vers page publique")
-        return baseUrl
-      }
-      
-      // Si c'est une URL relative
-      if (url.startsWith("/")) {
-        const fullUrl = `${baseUrl}${url}`
-        console.log("🔄 URL relative détectée:", fullUrl)
-        
-        if (url === '/' || url === '') {
-          console.log("🏠 URL racine - vérification du contexte")
-          return baseUrl
-        }
-        
-        if (url === '/profile' || url.startsWith('/profile')) {
-          console.log("✅ Redirection vers /profile autorisée")
-          return fullUrl
-        }
-        
-        if (url === '/dashboard') {
-          console.log("🏠 Redirection dashboard vers /profile")
-          return `${baseUrl}/profile`
-        }
-        
-        return fullUrl
-      }
-
-      // Si c'est une URL du même domaine
-      if (new URL(url).origin === baseUrl) {
-        const urlObj = new URL(url)
-        
-        if (urlObj.pathname === '/' && urlObj.searchParams.get('callbackUrl') === '/') {
-          console.log("🏠 URL de déconnexion complète - page publique")
-          return baseUrl
-        }
-        
-        if (urlObj.pathname === '/profile' || urlObj.pathname.startsWith('/profile')) {
-          console.log("✅ URL complète /profile autorisée")
-          return url
-        }
-        
-        if (urlObj.pathname === '/dashboard') {
-          console.log("🏠 Redirection URL complète dashboard vers /profile")
-          return `${baseUrl}/profile`
-        }
-        
-        return url
-      }
-
-      console.log("🏠 Redirection par défaut")
+      if (url.startsWith("/")) return `${baseUrl}${url}`
+      else if (new URL(url).origin === baseUrl) return url
       return baseUrl
     }
   },
@@ -273,9 +280,30 @@ const authConfig = {
   events: {
     async signIn({ user, account, profile, isNewUser }) {
       console.log(`✅ Utilisateur connecté: ${user.email} via ${account?.provider}`)
+      
+      if (user.id) {
+        await cache.set(
+          `login:${user.id}:${Date.now()}`, 
+          {
+            userId: user.id,
+            email: user.email,
+            provider: account?.provider,
+            timestamp: new Date(),
+            isNewUser
+          },
+          { prefix: 'analytics:', ttl: 86400 }
+        )
+      }
     },
+    
     async signOut({ session, token }) {
       console.log(`👋 Utilisateur déconnecté`)
+      
+      if (token?.id) {
+        await sessionCache.delete(token.id as string)
+        await cache.delete(`verification:${token.id}`, { prefix: 'auth:' })
+        console.log("🧹 Cache de session nettoyé pour:", token.id)
+      }
     },
   },
 
@@ -283,5 +311,13 @@ const authConfig = {
   secret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET,
 }
 
-// ✅ CORRECTION: Exporter avec NextAuth et destructurer
 export const { handlers, auth, signIn, signOut } = NextAuth(authConfig)
+
+export async function invalidateUserCache(email: string, userId?: string) {
+  await userCache.delete(email)
+  if (userId) {
+    await sessionCache.delete(userId)
+    await cache.delete(`verification:${userId}`, { prefix: 'auth:' })
+  }
+  console.log("🧹 Cache utilisateur invalidé:", email)
+}
