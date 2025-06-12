@@ -9,13 +9,15 @@ import { useStream } from '@/hooks/useStream';
 import ChatComponent from './ChatComponent';
 import VideoCallComponent from './VideoCallComponent';
 import { Heart, MessageCircle, User, Video, Phone, ArrowLeft } from 'lucide-react';
+import { SimpleLoading } from '@/components/ui/SimpleLoading';
+import { SimpleError } from '@/components/ui/SimpleError';
+
 import type { 
   User as StreamUser, 
   HeaderProps, 
   SidebarProps, 
   ProfileTabProps,
-  TabType,
-  prismaUserToStreamUser 
+  TabType
 } from '@/types/stream';
 
 const DatingApp: React.FC = () => {
@@ -157,93 +159,64 @@ const DatingApp: React.FC = () => {
     window.location.href = '/matches';
   };
 
-  // États de chargement
+  // 🆕 AMÉLIORÉ : États de chargement avec SimpleLoading
   if (authLoading || loading || streamLoading) {
+    let message = 'Chargement...';
+    if (authLoading) message = 'Vérification de l\'authentification...';
+    if (loading) message = 'Chargement de l\'utilisateur...';
+    if (streamLoading) message = 'Connexion au chat...';
+
     return (
-      <div className="flex items-center justify-center h-screen bg-gradient-to-br from-pink-100 to-purple-100">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-500 mx-auto mb-4"></div>
-          <p className="text-gray-600">
-            {authLoading && 'Vérification de l\'authentification...'}
-            {loading && 'Chargement de l\'utilisateur...'}
-            {streamLoading && 'Connexion au chat...'}
-          </p>
-        </div>
+      <div className="h-screen bg-gradient-to-br from-pink-100 to-purple-100 flex items-center justify-center">
+        <SimpleLoading message={message} />
       </div>
     );
   }
 
-  // Gestion des erreurs
+  // 🆕 AMÉLIORÉ : Gestion des erreurs avec SimpleError
   if (error || streamError) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gradient-to-br from-red-100 to-pink-100">
-        <div className="text-center bg-white p-8 rounded-lg shadow-lg max-w-md">
-          <div className="text-red-500 mb-4">
-            <Heart className="h-12 w-12 mx-auto" />
-          </div>
-          <h2 className="text-xl font-semibold text-gray-800 mb-2">Erreur</h2>
-          <p className="text-gray-600 mb-4">{error || streamError}</p>
-          <div className="space-y-2">
-            <button 
-              onClick={() => window.location.reload()}
-              className="w-full bg-pink-500 text-white px-4 py-2 rounded-lg hover:bg-pink-600 transition-colors"
-              type="button"
-            >
-              Réessayer
-            </button>
-            <button 
-              onClick={goBackToMatches}
-              className="w-full bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors"
-              type="button"
-            >
-              Retour aux matchs
-            </button>
-          </div>
-        </div>
+      <div className="h-screen bg-gradient-to-br from-red-100 to-pink-100 flex items-center justify-center">
+        <SimpleError 
+          message={error || streamError || 'Une erreur est survenue'}
+          onRetry={() => {
+            setError(null);
+            window.location.reload();
+          }}
+        />
       </div>
     );
   }
 
-  // Vérifications de sécurité
+  // 🆕 AMÉLIORÉ : État non connecté avec SimpleError
   if (!currentUser) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-center">
-          <Heart className="h-12 w-12 text-pink-500 mx-auto mb-4" />
-          <p className="text-gray-600 mb-4">Veuillez vous connecter pour accéder au chat</p>
-          <button 
-            onClick={() => window.location.href = '/auth/login'}
-            className="bg-pink-500 text-white px-4 py-2 rounded-lg hover:bg-pink-600"
-            type="button"
-          >
-            Se connecter
-          </button>
-        </div>
+      <div className="h-screen flex items-center justify-center">
+        <SimpleError 
+          message="Veuillez vous connecter pour accéder au chat"
+          onRetry={() => window.location.href = '/auth/login'}
+        />
       </div>
     );
   }
 
+  // 🆕 AMÉLIORÉ : Utilisateur non trouvé avec SimpleError
   if (!matchedUser) {
+    const message = userId 
+      ? 'Cet utilisateur n\'existe pas ou n\'est plus disponible.' 
+      : 'Aucun utilisateur sélectionné.';
+    
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-center">
-          <MessageCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-800 mb-2">Utilisateur non trouvé</h2>
-          <p className="text-gray-600 mb-4">
-            {userId ? 'Cet utilisateur n\'existe pas ou n\'est plus disponible.' : 'Aucun utilisateur sélectionné.'}
-          </p>
-          <button 
-            onClick={goBackToMatches}
-            className="bg-pink-500 text-white px-4 py-2 rounded-lg hover:bg-pink-600"
-            type="button"
-          >
-            Retour aux matchs
-          </button>
-        </div>
+      <div className="h-screen flex items-center justify-center">
+        <SimpleError 
+          message={message}
+          onRetry={goBackToMatches}
+        />
       </div>
     );
   }
 
+  // ✅ GARDER : Le reste de votre logique exactement comme avant
   return (
     <div className="h-screen bg-gradient-to-br from-pink-50 to-purple-50">
       <Header 
@@ -291,6 +264,8 @@ const DatingApp: React.FC = () => {
     </div>
   );
 };
+
+// ✅ GARDER : Tous vos composants existants exactement comme avant
 
 // Header adapté avec bouton retour
 interface HeaderPropsExtended extends HeaderProps {

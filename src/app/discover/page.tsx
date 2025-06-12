@@ -1,6 +1,7 @@
 // src/app/discover/page.tsx - VERSION ULTRA SIMPLE QUI MARCHE
 'use client';
-
+import { SimpleLoading } from '@/components/ui/SimpleLoading';
+import { SimpleError } from '@/components/ui/SimpleError';
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 
@@ -165,14 +166,7 @@ export default function DiscoverPageSimple() {
   // ================================
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-pink-500 mx-auto mb-4"></div>
-          <p>Chargement des profils...</p>
-        </div>
-      </div>
-    );
+    return <SimpleLoading message="Chargement des profils ..." />;
   }
 
   if (error) {

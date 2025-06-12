@@ -1,4 +1,4 @@
-// src/hooks/useStream.ts - Version corrigée
+// src/hooks/useStream.ts
 import { useState, useEffect } from 'react';
 import { StreamChat } from 'stream-chat';
 import { StreamVideoClient } from '@stream-io/video-react-sdk';

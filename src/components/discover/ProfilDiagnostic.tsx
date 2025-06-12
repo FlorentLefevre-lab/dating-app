@@ -1,6 +1,7 @@
 // src/components/discover/ProfileDiagnostic.tsx
 'use client';
-
+import { SimpleLoading } from '@/components/ui/SimpleLoading';
+import { SimpleError } from '@/components/ui/SimpleError';
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
@@ -174,10 +175,7 @@ const ProfileDiagnostic: React.FC<{
       </div>
 
       {loading ? (
-        <div className="text-center py-4">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-current mx-auto mb-2"></div>
-          <p className="text-sm">Analyse en cours...</p>
-        </div>
+       <SimpleLoading message="ChargeAnalyse en cours ..." />
       ) : diagnostic ? (
         <div className="space-y-4">
           {/* Statistiques */}

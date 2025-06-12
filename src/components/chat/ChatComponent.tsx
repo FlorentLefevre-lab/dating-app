@@ -4,6 +4,7 @@ import React from 'react';
 import { Chat, Channel, MessageList, MessageInput, Thread, Window } from 'stream-chat-react';
 import { MessageCircle, Phone, Video, MoreVertical } from 'lucide-react';
 import type { ChatComponentProps, User } from '@/types/stream';
+import { SimpleChatHeader } from './SimpleChatHeader';
 
 const ChatComponent: React.FC<ChatComponentProps> = ({ 
   chatClient, 

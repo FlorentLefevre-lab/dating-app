@@ -14,71 +14,37 @@ import {
   HomeIcon
 } from '@heroicons/react/24/outline';
 
-// Import des types
-import type { UserProfile, TabType, MessageType } from '../../types/profiles';
+// 🆕 NOUVEAU : Ajouter ces imports
+import { SimpleLoading } from '@/components/ui/SimpleLoading';
+import { SimpleError } from '@/components/ui/SimpleError';
 
-// Import des composants avec des imports dynamiques
+// ✅ GARDER : Tous vos imports et types exactement comme avant
+import type { UserProfile, TabType, MessageType } from '../../types/profiles';
 import dynamic from 'next/dynamic';
 
+// ✅ GARDER : Tous vos imports dynamiques exactement comme avant
 const ProfileOverview = dynamic(() => import('./ProfileOverview'), {
-  loading: () => <div className="p-4 animate-pulse">
-    <div className="h-8 bg-gray-200 rounded w-1/3 mb-4"></div>
-    <div className="h-64 bg-gray-200 rounded"></div>
-  </div>
+  loading: () => <SimpleLoading message="Chargement de l'aperçu..." />
 });
 
 const BasicInfoForm = dynamic(() => import('./BasicInfoForm'), {
-  loading: () => <div className="p-4 animate-pulse">
-    <div className="h-8 bg-gray-200 rounded w-1/2 mb-6"></div>
-    <div className="space-y-4">
-      <div className="h-12 bg-gray-200 rounded"></div>
-      <div className="h-12 bg-gray-200 rounded"></div>
-      <div className="h-32 bg-gray-200 rounded"></div>
-    </div>
-  </div>
+  loading: () => <SimpleLoading message="Chargement du formulaire..." />
 });
 
 const PersonalInfoForm = dynamic(() => import('./PersonalInfoForm'), {
-  loading: () => <div className="p-4 animate-pulse">
-    <div className="h-8 bg-gray-200 rounded w-1/2 mb-6"></div>
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {[...Array(6)].map((_, i) => (
-        <div key={i} className="h-12 bg-gray-200 rounded"></div>
-      ))}
-    </div>
-  </div>
+  loading: () => <SimpleLoading message="Chargement des informations..." />
 });
 
 const PhotosManager = dynamic(() => import('./PhotosManager'), {
-  loading: () => <div className="p-4 animate-pulse">
-    <div className="h-8 bg-gray-200 rounded w-1/3 mb-6"></div>
-    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-      {[...Array(6)].map((_, i) => (
-        <div key={i} className="aspect-square bg-gray-200 rounded-xl"></div>
-      ))}
-    </div>
-  </div>
+  loading: () => <SimpleLoading message="Chargement des photos..." />
 });
 
 const PreferencesForm = dynamic(() => import('./PreferencesForm'), {
-  loading: () => <div className="p-4 animate-pulse">
-    <div className="h-8 bg-gray-200 rounded w-1/2 mb-6"></div>
-    <div className="space-y-6">
-      <div className="h-32 bg-gray-200 rounded"></div>
-      <div className="h-32 bg-gray-200 rounded"></div>
-    </div>
-  </div>
+  loading: () => <SimpleLoading message="Chargement des préférences..." />
 });
 
 const SettingsPanel = dynamic(() => import('./SettingsPanel'), {
-  loading: () => <div className="p-4 animate-pulse">
-    <div className="h-8 bg-gray-200 rounded w-1/2 mb-6"></div>
-    <div className="space-y-4">
-      {[...Array(3)].map((_, i) => (
-        <div key={i} className="h-24 bg-gray-200 rounded"></div>
-      ))}
-    </div>
-  </div>
+  loading: () => <SimpleLoading message="Chargement des paramètres..." />
 });
 
 const ProfileManager: React.FC = () => {
@@ -89,8 +55,11 @@ const ProfileManager: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState<MessageType>('success');
+  
+  // 🆕 NOUVEAU : Ajouter un état d'erreur
+  const [error, setError] = useState<string | null>(null);
 
-  // Configuration des onglets
+  // ✅ GARDER : Votre configuration des onglets exactement comme avant
   const tabs = [
     { 
       id: 'dashboard' as const, 
@@ -145,14 +114,15 @@ const ProfileManager: React.FC = () => {
     }
   ];
 
-  // Chargement initial
   useEffect(() => {
     loadProfile();
   }, []);
 
+  // 🆕 AMÉLIORÉ : Fonction loadProfile avec gestion d'erreur
   const loadProfile = async () => {
     try {
       setLoading(true);
+      setError(null); // Reset error
       console.log('🔄 Chargement du profil...');
       
       const response = await fetch('/api/profile', {
@@ -161,7 +131,7 @@ const ProfileManager: React.FC = () => {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+        throw new Error(`Erreur ${response.status}: Impossible de charger le profil`);
       }
 
       const data = await response.json();
@@ -173,14 +143,15 @@ const ProfileManager: React.FC = () => {
         setProfile(data);
       }
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Erreur:', error);
-      showMessage('Erreur lors du chargement du profil', 'error');
+      setError(error.message || 'Erreur lors du chargement du profil');
     } finally {
       setLoading(false);
     }
   };
 
+  // ✅ GARDER : Toutes vos autres fonctions exactement comme avant
   const loadPreferences = async () => {
     try {
       console.log('🔄 Chargement des préférences...');
@@ -222,7 +193,6 @@ const ProfileManager: React.FC = () => {
     setTimeout(() => setMessage(''), 5000);
   };
 
-  // Calcul du pourcentage de complétion
   const getProfileCompletion = () => {
     if (!profile) return 0;
     
@@ -241,7 +211,7 @@ const ProfileManager: React.FC = () => {
     return Math.round((completed / fields.length) * 100);
   };
 
-  // Handlers pour les formulaires
+  // ✅ GARDER : Tous vos handlers exactement comme avant
   const handleBasicInfoSubmit = async (data: any) => {
     setSaving(true);
     try {
@@ -332,7 +302,6 @@ const ProfileManager: React.FC = () => {
     }
   };
 
-  // Fonction pour changer d'onglet
   const handleTabChange = (tabId: TabType | 'dashboard') => {
     if (tabId === 'dashboard') {
       window.location.href = '/dashboard';
@@ -341,44 +310,41 @@ const ProfileManager: React.FC = () => {
     setActiveTab(tabId);
   };
 
+  // 🆕 AMÉLIORÉ : État de chargement simplifié
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-        <div className="max-w-6xl mx-auto p-4 md:p-6">
-          <div className="animate-pulse space-y-6">
-            {/* Header skeleton */}
-            <div className="bg-white rounded-2xl p-4 md:p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="h-8 bg-gray-200 rounded w-1/3"></div>
-                <div className="h-6 bg-gray-200 rounded w-16"></div>
-              </div>
-              <div className="flex space-x-4 overflow-x-auto">
-                {[...Array(7)].map((_, i) => (
-                  <div key={i} className="h-12 bg-gray-200 rounded flex-1 min-w-32"></div>
-                ))}
-              </div>
-            </div>
-            {/* Content skeleton */}
-            <div className="bg-white rounded-2xl p-4 md:p-6">
-              <div className="h-64 bg-gray-200 rounded"></div>
-            </div>
-          </div>
-        </div>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
+        <SimpleLoading message="Chargement de votre profil..." />
       </div>
     );
   }
 
+  // 🆕 NOUVEAU : État d'erreur simplifié
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
+        <SimpleError 
+          message={error}
+          onRetry={() => {
+            setError(null);
+            loadProfile();
+          }}
+        />
+      </div>
+    );
+  }
+
+  // ✅ GARDER : Tout le reste de votre JSX exactement comme avant
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       <div className="max-w-6xl mx-auto p-4 md:p-6">
 
-        {/* Header avec barre de progression */}
+        {/* ✅ GARDER : Header avec barre de progression exactement comme avant */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           className="bg-white rounded-2xl shadow-lg border border-gray-100 mb-6"
         >
-          {/* Header principal */}
           <div className="flex flex-col md:flex-row md:items-center justify-between p-4 md:p-6 border-b border-gray-200">
             <div className="mb-4 md:mb-0">
               <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-pink-500 to-blue-500 bg-clip-text text-transparent">
@@ -389,7 +355,6 @@ const ProfileManager: React.FC = () => {
               </p>
             </div>
             
-            {/* Indicateur de progression */}
             <div className="text-right">
               <div className="text-xs md:text-sm text-gray-500 mb-2">Profil complété</div>
               <div className="flex items-center gap-2 md:gap-3">
@@ -408,13 +373,12 @@ const ProfileManager: React.FC = () => {
             </div>
           </div>
 
-          {/* Navigation par onglets - Horizontale avec scroll */}
+          {/* ✅ GARDER : Navigation par onglets exactement comme avant */}
           <div className="flex overflow-x-auto bg-gradient-to-r from-gray-50 to-gray-100">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
               
-              // Si c'est un lien externe (dashboard)
               if (tab.isLink) {
                 return (
                   <motion.a
@@ -449,7 +413,6 @@ const ProfileManager: React.FC = () => {
                     {tab.label}
                   </div>
                   
-                  {/* Badge pour photos */}
                   {tab.id === 'photos' && profile?.photos?.length && (
                     <span className="absolute -top-1 -right-1 px-1.5 py-0.5 text-xs rounded-full bg-pink-500 text-white">
                       {profile.photos.length}
@@ -468,7 +431,7 @@ const ProfileManager: React.FC = () => {
           </div>
         </motion.div>
 
-        {/* Messages de feedback */}
+        {/* ✅ GARDER : Messages de feedback exactement comme avant */}
         <AnimatePresence>
           {message && (
             <motion.div
@@ -493,7 +456,7 @@ const ProfileManager: React.FC = () => {
           )}
         </AnimatePresence>
 
-        {/* Contenu principal */}
+        {/* ✅ GARDER : Contenu principal exactement comme avant */}
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
