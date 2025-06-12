@@ -14,8 +14,7 @@ import {
 } from '@heroicons/react/24/outline';
 
 import { SettingsPanelProps } from '../../types/profiles';
-import { useAccountSuspension } from '@/hooks/useAccountSuspension';
-
+import { useAccountActions } from '@/hooks/useAccountActions';
 const SettingsPanel: React.FC<SettingsPanelProps> = ({ 
   profile, 
   photos, 
@@ -65,8 +64,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   const isAccountSuspended = accountStatus === 'SUSPENDED' || accountStatus === 'BANNED';
   const isAccountActive = accountStatus === 'ACTIVE';
   
-  const { reactivateAccount, isLoading: hookIsLoading } = useAccountSuspension();
-
+  const { reactivateAccount, isLoading: hookIsLoading } = useAccountActions();
   // Réinitialisation de l'état de suspension
   useEffect(() => {
     if (profile?.id) {

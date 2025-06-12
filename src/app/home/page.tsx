@@ -1,14 +1,15 @@
-// src/app/page.tsx - Version avec affichage du statut du compte
+// src/app/page.tsx - Version refactorisée avec useQuery
 'use client'
 
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import AuthGuard from './../../components/auth/AuthGuard'
-import { RecentActivity } from './../../components/profile/RecentActivity'
-import { StatsDashboard } from './../../components/profile/StatsDashboard'
-import { useRealTimeStats } from './../../hooks/useRealTimeStats'
+import AuthGuard from '@/components/auth/AuthGuard'
+import { RecentActivity } from '@/components/profile/RecentActivity'
+import { StatsDashboard } from '@/components/profile/StatsDashboard'
+import { useStats } from '@/hooks/useStats'
+import { useQuery } from '@/hooks/useQuery'
 
 // ================================
 // TYPES POUR L'API DISCOVER
@@ -71,177 +72,79 @@ export default function HomePage() {
   const { data: session } = useSession()
   const router = useRouter()
   
-  // 🚀 HOOK TEMPS RÉEL pour les statistiques
+  // 🚀 HOOKS REFACTORISÉS - Fini le fetch manuel !
+  
+  // Stats temps réel avec useStats (remplace useRealTimeStats)
   const { 
-    stats, 
-    recentActivity, 
+    data: stats, 
     isLoading: statsLoading, 
     error: statsError,
-    refreshStats,
-    lastUpdated
-  } = useRealTimeStats(30000) // Refresh toutes les 30 secondes
+    refresh: refreshStats
+  } = useStats(true) // Polling automatique 30s
+  
+  // Account status avec useQuery (remplace loadAccountStatus)
+  const { 
+    data: rawAccountStatus, 
+    isLoading: statusLoading, 
+    error: statusError 
+  } = useQuery<any>('/api/profile', {
+    cache: true,
+    cacheTtl: 2 * 60 * 1000, // 2 minutes
+    enabled: !!session?.user?.id
+  })
+
+  // Transformer les données du profil pour obtenir le statut
+  const accountStatus: AccountStatus | null = rawAccountStatus ? {
+    accountStatus: rawAccountStatus.accountStatus || 'ACTIVE',
+    suspendedAt: rawAccountStatus.suspendedAt,
+    suspensionReason: rawAccountStatus.suspensionReason,
+    suspendedUntil: rawAccountStatus.suspendedUntil
+  } : null
+
+  // Discover profiles avec useQuery (remplace loadDiscoverProfiles)
+  const { 
+    data: discoveryData, 
+    isLoading: discoverLoading, 
+    error: discoverError,
+    refresh: reloadProfiles 
+  } = useQuery<DiscoverApiResponse>('/api/discover?limit=10', {
+    cache: true,
+    cacheTtl: 30 * 1000, // 30 secondes
+    enabled: !!session?.user?.id
+  })
+
+  // Actions API avec useQuery (remplace tous les fetch manuels d'actions)
+  const { 
+    post: sendAction 
+  } = useQuery('/api/discover', { 
+    enabled: false // Utilisé seulement pour les actions manuelles
+  })
 
   // ================================
-  // ÉTATS POUR LE STATUT DU COMPTE
+  // ÉTATS UI SEULEMENT (plus d'états de données !)
   // ================================
   
-  const [accountStatus, setAccountStatus] = useState<AccountStatus | null>(null)
-  const [statusLoading, setStatusLoading] = useState(true)
-  const [statusError, setStatusError] = useState<string | null>(null)
-
-  // ================================
-  // ÉTATS POUR LA DÉCOUVERTE (API)
-  // ================================
-  
-  const [discoveryUsers, setDiscoveryUsers] = useState<DiscoverUser[]>([])
   const [currentUserIndex, setCurrentUserIndex] = useState(0)
-  const [discoverLoading, setDiscoverLoading] = useState(true)
-  const [discoverError, setDiscoverError] = useState<string | null>(null)
   const [isMatch, setIsMatch] = useState(false)
   const [matchUser, setMatchUser] = useState<{ id: string; name: string } | null>(null)
 
+  // Données dérivées (plus de useState pour les données)
+  const discoveryUsers = discoveryData?.users || []
   const currentUser = discoveryUsers[currentUserIndex]
 
   // ================================
-  // CHARGEMENT DU STATUT DU COMPTE
-  // ================================
-
-  const loadAccountStatus = async () => {
-    try {
-      setStatusLoading(true)
-      setStatusError(null)
-
-      console.log('🔍 Chargement du statut du compte...')
-
-      const response = await fetch('/api/profile', {
-        method: 'GET',
-        credentials: 'include',
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
-        }
-      })
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
-      }
-
-      const data = await response.json()
-
-      console.log('📋 Statut du compte récupéré:', {
-        accountStatus: data.accountStatus,
-        suspendedAt: data.suspendedAt,
-        suspensionReason: data.suspensionReason
-      })
-
-      setAccountStatus({
-        accountStatus: data.accountStatus || 'ACTIVE',
-        suspendedAt: data.suspendedAt,
-        suspensionReason: data.suspensionReason,
-        suspendedUntil: data.suspendedUntil
-      })
-
-    } catch (err: any) {
-      console.error('❌ Erreur chargement statut:', err)
-      setStatusError(err.message)
-      // Fallback vers ACTIVE si erreur
-      setAccountStatus({ accountStatus: 'ACTIVE' })
-    } finally {
-      setStatusLoading(false)
-    }
-  }
-
-  // ================================
-  // CHARGEMENT DES PROFILS DISCOVER
-  // ================================
-
-  const loadDiscoverProfiles = async () => {
-    try {
-      setDiscoverLoading(true)
-      setDiscoverError(null)
-
-      console.log('🔍 Chargement des profils discover pour la home...')
-
-      const response = await fetch('/api/discover?limit=10', {
-        method: 'GET',
-        credentials: 'include',
-      })
-
-      if (!response.ok) {
-        throw new Error(`API Error: ${response.status}`)
-      }
-
-      const data: DiscoverApiResponse = await response.json()
-
-      console.log('📊 API Discover response:', data)
-
-      if (!data.success) {
-        throw new Error(data.error || 'API returned success: false')
-      }
-
-      if (!data.users || !Array.isArray(data.users)) {
-        throw new Error('Invalid users data from API')
-      }
-
-      // Transformation pour compatibilité avec l'UI existante
-      const transformedUsers: DiscoverUser[] = data.users.map(user => ({
-        id: user.id,
-        name: user.name,
-        age: user.age,
-        bio: user.bio,
-        location: user.location,
-        profession: user.profession,
-        interests: user.interests || [],
-        photos: user.photos || [],
-        compatibility: user.compatibility,
-        isOnline: user.isOnline || false,
-        memberSince: user.memberSince
-      }))
-
-      setDiscoveryUsers(transformedUsers)
-      setCurrentUserIndex(0)
-
-      console.log('✅ Profils discover chargés:', transformedUsers.length)
-
-    } catch (err: any) {
-      console.error('❌ Erreur chargement discover:', err)
-      setDiscoverError(err.message)
-      
-      // Fallback vers profils vides en cas d'erreur
-      setDiscoveryUsers([])
-    } finally {
-      setDiscoverLoading(false)
-    }
-  }
-
-  // Chargement initial
-  useEffect(() => {
-    if (session?.user) {
-      loadAccountStatus()
-      loadDiscoverProfiles()
-    }
-  }, [session])
-
-  // ================================
-  // ACTIONS DISCOVER (API)
+  // ACTIONS DISCOVER SIMPLIFIÉES
   // ================================
 
   const handleLike = async (userId: string) => {
     try {
       console.log('💖 Like user via API:', userId)
 
-      // Appel API pour le like
-      const response = await fetch('/api/discover', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          targetUserId: userId,
-          action: 'like'
-        })
+      const result = await sendAction({
+        targetUserId: userId,
+        action: 'like'
       })
 
-      const result = await response.json()
       console.log('📡 Like result:', result)
 
       if (result.success) {
@@ -273,22 +176,14 @@ export default function HomePage() {
     try {
       console.log('👎 Pass user via API:', userId)
 
-      // Appel API pour le dislike
-      const response = await fetch('/api/discover', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          targetUserId: userId,
-          action: 'dislike'
-        })
+      const result = await sendAction({
+        targetUserId: userId,
+        action: 'dislike'
       })
 
-      const result = await response.json()
       console.log('📡 Pass result:', result)
 
       if (result.success) {
-        // Passer au profil suivant
         nextUser()
       } else {
         console.error('❌ Erreur API pass:', result.error)
@@ -307,17 +202,11 @@ export default function HomePage() {
     try {
       console.log('⭐ Super Like user via API:', userId)
 
-      const response = await fetch('/api/discover', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          targetUserId: userId,
-          action: 'super_like'
-        })
+      const result = await sendAction({
+        targetUserId: userId,
+        action: 'super_like'
       })
 
-      const result = await response.json()
       console.log('📡 Super Like result:', result)
 
       if (result.success) {
@@ -345,12 +234,12 @@ export default function HomePage() {
     } else {
       // Recharger de nouveaux profils quand on arrive à la fin
       console.log('🔄 Fin des profils, rechargement...')
-      loadDiscoverProfiles()
+      reloadProfiles() // useQuery refresh au lieu de fonction custom
     }
   }
 
   // ================================
-  // GESTION DE L'AVATAR/PHOTO
+  // GESTION DE L'AVATAR/PHOTO (inchangée)
   // ================================
 
   const getUserAvatar = (user: DiscoverUser) => {
@@ -377,7 +266,7 @@ export default function HomePage() {
   }
 
   // ================================
-  // COMPOSANT D'AFFICHAGE DU STATUT
+  // COMPOSANT D'AFFICHAGE DU STATUT (inchangé)
   // ================================
 
   const AccountStatusBanner = () => {
@@ -401,7 +290,7 @@ export default function HomePage() {
               <span className="text-sm text-yellow-700">Impossible de vérifier le statut du compte</span>
             </div>
             <button
-              onClick={loadAccountStatus}
+              onClick={() => window.location.reload()} // Simple reload au lieu de fonction custom
               className="text-xs bg-yellow-500 text-white px-2 py-1 rounded hover:bg-yellow-600"
             >
               Réessayer
@@ -413,7 +302,7 @@ export default function HomePage() {
 
     if (!accountStatus) return null
 
-    // Affichage selon le statut
+    // Affichage selon le statut (code inchangé)
     switch (accountStatus.accountStatus) {
       case 'SUSPENDED':
         return (
@@ -526,13 +415,13 @@ export default function HomePage() {
     }
   }
 
-  // 🎯 Actions rapides avec badges de notification
+  // 🎯 Actions rapides avec badges de notification (utilise maintenant stats depuis useStats)
   const quickActions = [
     { 
       icon: '💬', 
       label: 'Messages', 
       href: '/messages',
-      count: stats.dailyStats.messagesReceived,
+      count: stats?.dailyStats?.messagesReceived || 0,
       color: 'from-blue-500 to-blue-600',
       description: 'Nouveaux messages'
     },
@@ -540,7 +429,7 @@ export default function HomePage() {
       icon: '💖', 
       label: 'Matchs', 
       href: '/matches',
-      count: stats.matchesCount,
+      count: stats?.matchesCount || 0,
       color: 'from-pink-500 to-pink-600',
       description: 'Matches actifs'
     },
@@ -548,7 +437,7 @@ export default function HomePage() {
       icon: '👀', 
       label: 'Visites', 
       href: '/profile/visits',
-      count: stats.dailyStats.profileViews,
+      count: stats?.dailyStats?.profileViews || 0,
       color: 'from-purple-500 to-purple-600',
       description: 'Vues aujourd\'hui'
     },
@@ -615,10 +504,7 @@ export default function HomePage() {
                     statsError ? 'bg-red-400' : 'bg-green-400'
                   }`}></div>
                   <span>
-                    {lastUpdated ? `Mis à jour ${lastUpdated.toLocaleTimeString('fr-FR', { 
-                      hour: '2-digit', 
-                      minute: '2-digit' 
-                    })}` : 'Chargement...'}
+                    Données temps réel
                   </span>
                 </div>
                 {statsError && (
@@ -642,25 +528,25 @@ export default function HomePage() {
               <div className="grid grid-cols-2 gap-3 mb-6">
                 <div className="text-center p-3 bg-blue-50 rounded-lg">
                   <div className="text-2xl font-bold text-blue-600">
-                    {statsLoading ? '...' : stats.dailyStats.profileViews}
+                    {statsLoading ? '...' : stats?.dailyStats?.profileViews || 0}
                   </div>
                   <div className="text-xs text-blue-700">Vues aujourd&apos;hui</div>
                 </div>
                 <div className="text-center p-3 bg-pink-50 rounded-lg">
                   <div className="text-2xl font-bold text-pink-600">
-                    {statsLoading ? '...' : stats.dailyStats.likesReceived}
+                    {statsLoading ? '...' : stats?.dailyStats?.likesReceived || 0}
                   </div>
                   <div className="text-xs text-pink-700">Likes reçus</div>
                 </div>
                 <div className="text-center p-3 bg-green-50 rounded-lg">
                   <div className="text-2xl font-bold text-green-600">
-                    {statsLoading ? '...' : stats.dailyStats.messagesReceived}
+                    {statsLoading ? '...' : stats?.dailyStats?.messagesReceived || 0}
                   </div>
                   <div className="text-xs text-green-700">Messages reçus</div>
                 </div>
                 <div className="text-center p-3 bg-orange-50 rounded-lg">
                   <div className="text-2xl font-bold text-orange-600">
-                    {statsLoading ? '...' : stats.matchesCount}
+                    {statsLoading ? '...' : stats?.matchesCount || 0}
                   </div>
                   <div className="text-xs text-orange-700">Matches total</div>
                 </div>
@@ -671,28 +557,28 @@ export default function HomePage() {
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-600">Performance du jour</span>
                   <span className={`font-medium ${
-                    (stats.dailyStats.profileViews + stats.dailyStats.likesReceived + stats.dailyStats.messagesReceived) > 5 
+                    ((stats?.dailyStats?.profileViews || 0) + (stats?.dailyStats?.likesReceived || 0) + (stats?.dailyStats?.messagesReceived || 0)) > 5 
                       ? 'text-green-600' : 'text-yellow-600'
                   }`}>
-                    {(stats.dailyStats.profileViews + stats.dailyStats.likesReceived + stats.dailyStats.messagesReceived) > 5 
+                    {((stats?.dailyStats?.profileViews || 0) + (stats?.dailyStats?.likesReceived || 0) + (stats?.dailyStats?.messagesReceived || 0)) > 5 
                       ? '🔥 Excellente' : '📈 Moyenne'}
                   </span>
                 </div>
               </div>
 
-              {/* Activité récente */}
+              {/* Note: recentActivity supprimé car c'étaient des données factices dans useRealTimeStats */}
               <div className="border-t border-gray-200 pt-6">
-                <RecentActivity
-                  activities={recentActivity || []}
-                  isLoading={statsLoading}
-                  onRefresh={refreshStats}
-                  maxItems={4}
-                  showRefreshButton={true}
-                  className="h-full"
-                />
+                <div className="text-center text-gray-500 text-sm">
+                  <div className="text-2xl mb-2">📈</div>
+                  <p>Activité récente bientôt disponible</p>
+                  <p className="text-xs text-gray-400 mt-1">Les vraies données d'activité seront ajoutées prochainement</p>
+                </div>
               </div>
             </div>
 
+            {/* COLONNE 2 & 3 : Code inchangé - juste utilise discoveryUsers depuis useQuery */}
+            {/* ... Le reste du JSX reste identique ... */}
+            
             {/* Colonne 2: Découverte API (au centre) - VERSION AGRANDIE */}
             <div className="xl:w-1/3 bg-white rounded-2xl p-4 border border-gray-200 shadow-sm flex flex-col min-h-[500px]">
               <div className="flex items-center justify-between mb-4">
@@ -710,7 +596,7 @@ export default function HomePage() {
                 </Link>
               </div>
 
-              {/* Limitation si compte suspendu */}
+              {/* Le reste du code discover reste identique car il utilise maintenant discoveryUsers depuis useQuery */}
               {accountStatus?.accountStatus === 'SUSPENDED' || accountStatus?.accountStatus === 'BANNED' ? (
                 <div className="flex-1 flex items-center justify-center">
                   <div className="text-center p-6">
@@ -742,7 +628,7 @@ export default function HomePage() {
                     <div className="text-2xl mb-2">😞</div>
                     <p className="text-sm text-red-600 mb-2">Erreur de chargement</p>
                     <button 
-                      onClick={loadDiscoverProfiles}
+                      onClick={() => reloadProfiles()} // useQuery refresh
                       className="text-xs bg-pink-500 text-white px-2 py-1 rounded hover:bg-pink-600"
                     >
                       Réessayer
@@ -751,7 +637,7 @@ export default function HomePage() {
                 </div>
               ) : currentUser ? (
                 <div className="flex-1 min-h-0">
-                  {/* CARTE PROFIL AGRANDIE AVEC PHOTO DE FOND */}
+                  {/* CARTE PROFIL - Code identique, utilise currentUser depuis useQuery */}
                   <div 
                     className="rounded-xl relative overflow-hidden h-full flex flex-col shadow-xl"
                     style={{
@@ -991,9 +877,9 @@ export default function HomePage() {
                     💡 Conseil du jour
                   </h3>
                   <div className="text-orange-100 text-xs leading-relaxed mb-3">
-                    {stats.dailyStats.profileViews === 0 ? 
+                    {(stats?.dailyStats?.profileViews || 0) === 0 ? 
                       'Votre profil n\'a pas encore été vu aujourd\'hui. Pensez à vous connecter plus souvent et à optimiser vos photos !' :
-                      stats.dailyStats.profileViews > 20 ?
+                      (stats?.dailyStats?.profileViews || 0) > 20 ?
                       'Excellent ! Votre profil attire beaucoup d\'attention. Continuez sur cette lancée !' :
                       'Ajoutez plus de photos à votre profil pour augmenter vos chances de match de 40% !'
                     }

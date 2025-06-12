@@ -1,7 +1,8 @@
-// src/hooks/useDatingChat.ts
+// src/hooks/useDatingChat.ts - Version corrigée avec useQuery
 import { useState, useEffect, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { StreamChat, Channel } from 'stream-chat';
+import { useQuery } from './useQuery';
 
 interface Match {
   id: string;
@@ -24,6 +25,7 @@ interface UseDatingChatReturn {
   getOrCreateChannel: (otherUserId: string) => Promise<Channel | null>;
   markChannelAsRead: (channelId: string) => Promise<void>;
   getUnreadMessagesCount: () => number;
+  refreshMatches: () => Promise<void>;
   
   // État de chargement
   loading: boolean;
@@ -32,14 +34,26 @@ interface UseDatingChatReturn {
 
 export function useDatingChat(client: StreamChat | null): UseDatingChatReturn {
   const { data: session } = useSession();
+  
+  // ✅ Utiliser useQuery pour les matches (remplace le fetch manuel)
+  const { 
+    data: matches, 
+    isLoading: matchesLoading, 
+    error: matchesError,
+    refresh: refreshMatches 
+  } = useQuery<Match[]>('/api/matches', {
+    cache: true,
+    cacheTtl: 2 * 60 * 1000, // 2 minutes
+    enabled: !!session?.user?.id
+  });
+
+  // États pour Stream uniquement
   const [isConnected, setIsConnected] = useState(false);
-  const [matches, setMatches] = useState<Match[]>([]);
   const [activeChannels, setActiveChannels] = useState<Channel[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [channelsError, setChannelsError] = useState<string | null>(null);
 
-  // Surveiller l'état de connexion
+  // Surveiller l'état de connexion Stream
   useEffect(() => {
     if (!client) {
       setIsConnected(false);
@@ -62,33 +76,13 @@ export function useDatingChat(client: StreamChat | null): UseDatingChatReturn {
     };
   }, [client]);
 
-  // Charger les matches depuis votre API
-  const loadMatches = useCallback(async () => {
-    if (!session?.user?.id) return;
-
-    try {
-      setLoading(true);
-      const response = await fetch('/api/matches', {
-        credentials: 'include'
-      });
-      
-      if (response.ok) {
-        const matchesData = await response.json();
-        setMatches(matchesData);
-      }
-    } catch (err) {
-      console.error('Erreur chargement matches:', err);
-      setError('Impossible de charger les matches');
-    } finally {
-      setLoading(false);
-    }
-  }, [session?.user?.id]);
-
-  // Charger les channels actifs
+  // ✅ Charger les channels actifs (logique Stream conservée)
   const loadActiveChannels = useCallback(async () => {
     if (!client || !session?.user?.id) return;
 
     try {
+      setChannelsError(null);
+      
       const channels = await client.queryChannels(
         {
           type: 'messaging',
@@ -109,13 +103,13 @@ export function useDatingChat(client: StreamChat | null): UseDatingChatReturn {
 
     } catch (err) {
       console.error('Erreur chargement channels:', err);
-      setError('Impossible de charger les conversations');
+      setChannelsError('Impossible de charger les conversations');
     }
   }, [client, session?.user?.id]);
 
-  // Créer une conversation avec un match
+  // ✅ Créer une conversation avec un match
   const createConversationWithMatch = useCallback(async (matchId: string): Promise<Channel | null> => {
-    if (!client || !session?.user?.id) return null;
+    if (!client || !session?.user?.id || !matches) return null;
 
     try {
       const match = matches.find(m => m.id === matchId);
@@ -132,25 +126,25 @@ export function useDatingChat(client: StreamChat | null): UseDatingChatReturn {
 
       await channel.create();
       
-      // Mettre à jour le match avec l'ID du channel
-      setMatches(prev => prev.map(m => 
-        m.id === matchId ? { ...m, channelId: channel.id } : m
-      ));
-
+      // ✅ Plus besoin de setMatches - useQuery gère l'état
+      // Les matches sont maintenant en lecture seule depuis l'API
+      
       return channel;
       
     } catch (err) {
       console.error('Erreur création conversation:', err);
-      setError('Impossible de créer la conversation');
+      setChannelsError('Impossible de créer la conversation');
       return null;
     }
   }, [client, session?.user?.id, matches]);
 
-  // Obtenir ou créer un channel avec un utilisateur
+  // ✅ Obtenir ou créer un channel avec un utilisateur
   const getOrCreateChannel = useCallback(async (otherUserId: string): Promise<Channel | null> => {
     if (!client || !session?.user?.id) return null;
 
     try {
+      setChannelsError(null);
+      
       // Vérifier si un channel existe déjà
       const existingChannels = await client.queryChannels(
         {
@@ -175,12 +169,12 @@ export function useDatingChat(client: StreamChat | null): UseDatingChatReturn {
 
     } catch (err) {
       console.error('Erreur get/create channel:', err);
-      setError('Impossible d\'accéder à la conversation');
+      setChannelsError('Impossible d\'accéder à la conversation');
       return null;
     }
   }, [client, session?.user?.id]);
 
-  // Marquer un channel comme lu
+  // ✅ Marquer un channel comme lu
   const markChannelAsRead = useCallback(async (channelId: string) => {
     if (!client) return;
 
@@ -196,22 +190,22 @@ export function useDatingChat(client: StreamChat | null): UseDatingChatReturn {
     }
   }, [client, loadActiveChannels]);
 
-  // Obtenir le nombre total de messages non lus
+  // ✅ Obtenir le nombre total de messages non lus
   const getUnreadMessagesCount = useCallback(() => {
     return activeChannels.reduce((total, channel) => {
       return total + (channel.countUnread() || 0);
     }, 0);
   }, [activeChannels]);
 
-  // Charger les données au montage
+  // ✅ Charger les données au montage (matches automatiques via useQuery)
   useEffect(() => {
     if (isConnected && session?.user?.id) {
-      loadMatches();
+      // Plus besoin de loadMatches() - useQuery le fait automatiquement
       loadActiveChannels();
     }
-  }, [isConnected, session?.user?.id, loadMatches, loadActiveChannels]);
+  }, [isConnected, session?.user?.id, loadActiveChannels]);
 
-  // Écouter les nouveaux messages pour mettre à jour le compteur
+  // ✅ Écouter les nouveaux messages pour mettre à jour le compteur
   useEffect(() => {
     if (!client) return;
 
@@ -230,14 +224,15 @@ export function useDatingChat(client: StreamChat | null): UseDatingChatReturn {
 
   return {
     isConnected,
-    matches,
+    matches: matches || [],           // ✅ Directement depuis useQuery
     activeChannels,
     unreadCount,
     createConversationWithMatch,
     getOrCreateChannel,
     markChannelAsRead,
     getUnreadMessagesCount,
-    loading,
-    error
+    refreshMatches,                   // ✅ Fonction pour refresh manuel des matches
+    loading: matchesLoading,          // ✅ Loading depuis useQuery
+    error: matchesError || channelsError  // ✅ Erreurs combinées
   };
 }
