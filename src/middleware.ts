@@ -8,7 +8,10 @@ const publicPaths = new Set([
   '/auth/register', 
   '/auth/error',
   '/auth/verify-email',
-  '/auth/reset-password'
+  '/auth/reset-password',
+  '/api/health',
+  '/api/monitoring/health',
+  '/api/ping',
 ])
 
 function isPublicPath(pathname: string): boolean {

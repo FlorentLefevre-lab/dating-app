@@ -1,0 +1,175 @@
+services:
+  traefik:
+    image: traefik:v3.0
+    container_name: traefik-dev
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--log.level=INFO"
+    ports:
+      - "80:80"
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - dev-network
+
+  # Application Instance 1 - Définit le router ET le service
+  app1:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: dating-app-1
+    environment:
+      INSTANCE_ID: APP-1
+      INSTANCE_COLOR: '#FF6B6B'
+      DATABASE_URL: postgresql://dating_user:motdepasse123@postgres:5432/dating_db
+      REDIS_URL: redis://:redis123@redis:6379
+      NODE_ENV: development
+      NEXTAUTH_URL: http://localhost
+      NEXTAUTH_SECRET: your-secret-key-here-change-in-production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - dev-network
+    volumes:
+      - ./:/app
+      - /app/node_modules
+      - /app/.next
+    labels:
+      - "traefik.enable=true"
+      # Router (défini seulement sur app1)
+      - "traefik.http.routers.dating.rule=Host(`localhost`)"
+      - "traefik.http.routers.dating.service=dating-service"
+      - "traefik.http.routers.dating.entrypoints=web"
+      # Service (avec tous les paramètres)
+      - "traefik.http.services.dating-service.loadbalancer.server.port=3000"
+      - "traefik.http.services.dating-service.loadbalancer.sticky.cookie=true"
+      - "traefik.http.services.dating-service.loadbalancer.sticky.cookie.name=server_id"
+
+  # Application Instance 2 - Définit SEULEMENT le service avec les MÊMES paramètres
+  app2:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: dating-app-2
+    environment:
+      INSTANCE_ID: APP-2
+      INSTANCE_COLOR: '#4ECDC4'
+      DATABASE_URL: postgresql://dating_user:motdepasse123@postgres:5432/dating_db
+      REDIS_URL: redis://:redis123@redis:6379
+      NODE_ENV: development
+      NEXTAUTH_URL: http://localhost
+      NEXTAUTH_SECRET: your-secret-key-here-change-in-production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - dev-network
+    volumes:
+      - ./:/app
+      - /app/node_modules
+      - /app/.next
+    labels:
+      - "traefik.enable=true"
+      # Service seulement (avec TOUS les mêmes paramètres que app1)
+      - "traefik.http.services.dating-service.loadbalancer.server.port=3000"
+      - "traefik.http.services.dating-service.loadbalancer.sticky.cookie=true"
+      - "traefik.http.services.dating-service.loadbalancer.sticky.cookie.name=server_id"
+
+  # Application Instance 3 - Définit SEULEMENT le service avec les MÊMES paramètres
+  app3:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: dating-app-3
+    environment:
+      INSTANCE_ID: APP-3
+      INSTANCE_COLOR: '#95E1D3'
+      DATABASE_URL: postgresql://dating_user:motdepasse123@postgres:5432/dating_db
+      REDIS_URL: redis://:redis123@redis:6379
+      NODE_ENV: development
+      NEXTAUTH_URL: http://localhost
+      NEXTAUTH_SECRET: your-secret-key-here-change-in-production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - dev-network
+    volumes:
+      - ./:/app
+      - /app/node_modules
+      - /app/.next
+    labels:
+      - "traefik.enable=true"
+      # Service seulement (avec TOUS les mêmes paramètres que app1)
+      - "traefik.http.services.dating-service.loadbalancer.server.port=3000"
+      - "traefik.http.services.dating-service.loadbalancer.sticky.cookie=true"
+      - "traefik.http.services.dating-service.loadbalancer.sticky.cookie.name=server_id"
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres-dev
+    environment:
+      POSTGRES_DB: dating_db
+      POSTGRES_USER: dating_user
+      POSTGRES_PASSWORD: motdepasse123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - dev-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dating_user -d dating_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis-dev
+    command: redis-server --appendonly yes --requirepass redis123
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - dev-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "redis123", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin4-dev
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@localhost.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+    networks:
+      - dev-network
+    depends_on:
+      - postgres
+
+networks:
+  dev-network:
+
+volumes:
+  postgres-data:
+  redis-data:
+  pgadmin-data:

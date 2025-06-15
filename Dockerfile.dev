@@ -1,0 +1,25 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Installer les dépendances système nécessaires
+RUN apk add --no-cache libc6-compat
+
+# Copier les fichiers de dépendances
+COPY package.json yarn.lock* ./
+COPY prisma ./prisma/
+
+# Installer les dépendances
+RUN yarn install --frozen-lockfile
+
+# Générer le client Prisma
+RUN yarn db:generate
+
+# Copier le reste de l'application
+COPY . .
+
+# Exposer le port
+EXPOSE 3000
+
+# Commande de développement - utiliser next dev directement
+CMD ["yarn", "next", "dev", "-p", "3000"]
