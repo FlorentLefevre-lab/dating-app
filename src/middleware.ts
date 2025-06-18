@@ -12,6 +12,7 @@ const publicPaths = new Set([
   '/api/health',
   '/api/monitoring/health',
   '/api/ping',
+  '/debug',
 ])
 
 function isPublicPath(pathname: string): boolean {

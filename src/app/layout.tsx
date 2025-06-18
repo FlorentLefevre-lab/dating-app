@@ -1,12 +1,5 @@
-//src/app/layout.tsx
-
 import './globals.css'
-import { SessionProvider } from 'next-auth/react'
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
-import Navbar from '@/components/layout/Navbar'
-
-const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
   title: 'Flow Dating',
@@ -20,15 +13,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="fr">
-      <body className={inter.className}>
-          <SessionProvider>
-            {/* Contenu principal */}
-                {/* Navbar conditionnelle basée sur la route et l'authentification */}
-                <Navbar />
-                <main>
-                  {children}
-                </main>
-          </SessionProvider>
+      <body>
+        <main>
+          {children}
+        </main>
       </body>
     </html>
   )

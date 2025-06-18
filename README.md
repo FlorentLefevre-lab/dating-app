@@ -261,3 +261,13 @@ redis-cli -h localhost -p 6380 -a redis123 ping
 # 3. Surveiller les connexions Redis dans les logs
 
 docker-compose -f docker-compose.dev.yml logs -f | grep -i redis
+
+# Arrêter, nettoyer, reconstruire et redémarrer
+
+podman-compose -f docker-compose.complete.yml down -v && \
+podman container prune -f && \
+podman image rm -f dating-app-image 2>/dev/null || true && \
+rm -rf node_modules && \
+npm cache clean --force && \
+podman build -t dating-app-image -f Dockerfile.dev . && \
+podman-compose -f docker-compose.complete.yml up -d

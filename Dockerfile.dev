@@ -1,19 +1,22 @@
 FROM node:20-alpine
 
-# Installer wget et curl pour health checks
+# Installer wget, curl
 RUN apk add --no-cache wget curl
 
 WORKDIR /app
 
-# Copier package.json et package-lock.json
+# Copier les fichiers de dépendances
 COPY package*.json ./
 
-# Installer les dépendances
-# Utiliser npm install si package-lock.json n'existe pas
-RUN if [ -f "package-lock.json" ]; then npm ci; else npm install; fi
+# Installer les dépendances avec npm en ignorant les conflits de peer dependencies
+RUN npm cache clean --force && \
+    npm install --legacy-peer-deps --verbose
 
-# Copier le code source
+# Copier le code source (node_modules sera exclu par .dockerignore)
 COPY . .
+
+# Nettoyer les dossiers de build existants et fichiers Yarn
+RUN rm -rf .next node_modules/.cache .pnp.* .yarn yarn.lock 2>/dev/null || true
 
 # Exposer le port
 EXPOSE 3000
@@ -23,5 +26,5 @@ ENV NODE_ENV=development
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
-# Démarrage
+# IMPORTANT : Démarrage avec npm, pas yarn
 CMD ["npm", "run", "dev"]
