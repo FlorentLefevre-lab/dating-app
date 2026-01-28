@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { auth } from '@/lib/auth'
 import { PrismaClient } from '@prisma/client';
+import { getMaxPhotos } from '@/lib/config/photos';
 
 const prisma = new PrismaClient();
 
@@ -32,8 +33,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         where: { userId: user.id }
       });
 
-      if (existingPhotos >= 6) {
-        return res.status(400).json({ error: 'Maximum 6 photos autorisées' });
+      const isPremium = (user as any).isPremium || false;
+      const maxPhotos = getMaxPhotos(isPremium);
+
+      if (existingPhotos >= maxPhotos) {
+        return res.status(400).json({
+          error: `Maximum ${maxPhotos} photos autorisées${!isPremium ? '. Passez Premium pour en ajouter plus !' : ''}`
+        });
       }
 
       const photo = await prisma.photo.create({

@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { TrashIcon, StarIcon } from '@heroicons/react/24/outline';
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
 import { profileSchema, preferencesSchema, ProfileFormData, PreferencesFormData } from './../../lib/validations/profile';
+import { getMaxPhotos } from '@/lib/config/photos';
 
 
 
@@ -40,6 +41,10 @@ const ProfileForm: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [newInterest, setNewInterest] = useState('');
+  const [isPremium, setIsPremium] = useState(false);
+
+  // Calcul du max photos selon le statut premium
+  const maxPhotos = getMaxPhotos(isPremium);
 
   // Form pour le profil
   const {
@@ -461,7 +466,7 @@ const ProfileForm: React.FC = () => {
         >
           <h3 className="text-xl font-semibold mb-6 text-gray-700 flex items-center">
             <span className="w-2 h-2 bg-purple-500 rounded-full mr-3"></span>
-            Photos ({photos.length}/6)
+            Photos ({photos.length}/{maxPhotos})
           </h3>
           
           <div className="grid grid-cols-2 gap-4 mb-6">

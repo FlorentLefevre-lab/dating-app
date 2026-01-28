@@ -1,16 +1,20 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  PhotoIcon, 
-  TrashIcon, 
+import {
+  PhotoIcon,
+  TrashIcon,
   ArrowUpTrayIcon,
   ExclamationTriangleIcon,
   StarIcon,
-  CameraIcon
+  CameraIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  SparklesIcon
 } from '@heroicons/react/24/outline';
 
 import { Photo, PhotosManagerProps } from '@/types/profiles';
+import { PHOTO_CONFIG, getMaxPhotos } from '@/lib/config/photos';
 
 // Déclaration TypeScript pour Cloudinary
 declare global {
@@ -19,10 +23,53 @@ declare global {
   }
 }
 
-const PhotosManager: React.FC<PhotosManagerProps> = ({ photos, onMessage }) => {
+// Fonction pour générer la signature Cloudinary (uploads signés)
+const generateSignature = async (callback: (signature: string) => void, paramsToSign: Record<string, any>) => {
+  try {
+    const response = await fetch('/api/cloudinary/signature', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ paramsToSign }),
+    });
+    const data = await response.json();
+    callback(data.signature);
+  } catch (error) {
+    console.error('Error generating signature:', error);
+  }
+};
+
+const PhotosManager: React.FC<PhotosManagerProps> = ({
+  photos,
+  onMessage,
+  onPhotosChange,
+  isPremium = false
+}) => {
   const [localPhotos, setLocalPhotos] = useState<Photo[]>(photos);
   const [uploading, setUploading] = useState(false);
   const [cloudinaryLoaded, setCloudinaryLoaded] = useState(false);
+  const [uploadQueue, setUploadQueue] = useState<number>(0);
+  const [skippedPhotos, setSkippedPhotos] = useState<number>(0);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Calcul du max photos selon le statut premium (depuis config centralisée)
+  const MAX_PHOTOS = getMaxPhotos(isPremium);
+  const MAX_PHOTOS_PREMIUM = PHOTO_CONFIG.maxPhotosPremium;
+  const PHOTOS_PER_PAGE = PHOTO_CONFIG.photosPerPage;
+
+  // Calcul de la pagination
+  const totalPages = Math.ceil(localPhotos.length / PHOTOS_PER_PAGE);
+  const paginatedPhotos = useMemo(() => {
+    const startIndex = (currentPage - 1) * PHOTOS_PER_PAGE;
+    const endIndex = startIndex + PHOTOS_PER_PAGE;
+    return localPhotos.slice(startIndex, endIndex);
+  }, [localPhotos, currentPage]);
+
+  // Reset page when photos change
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(totalPages);
+    }
+  }, [totalPages, currentPage]);
 
   // Synchroniser avec les props
   useEffect(() => {
@@ -59,7 +106,7 @@ const PhotosManager: React.FC<PhotosManagerProps> = ({ photos, onMessage }) => {
   const loadPhotosFromAPI = async () => {
     try {
       const response = await fetch('/api/profile/photos');
-      
+
       if (response.ok) {
         const data = await response.json();
         const apiPhotos = data.photos || [];
@@ -78,29 +125,159 @@ const PhotosManager: React.FC<PhotosManagerProps> = ({ photos, onMessage }) => {
     }
 
     const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
-    const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
+    const apiKey = process.env.NEXT_PUBLIC_CLOUDINARY_API_KEY;
 
-    if (!cloudName || !uploadPreset) {
-      onMessage('Configuration Cloudinary manquante', 'error');
+    console.log('🔧 Cloudinary config:', { cloudName, apiKey: apiKey ? '***' + apiKey.slice(-4) : 'missing' });
+
+    if (!cloudName || cloudName === 'your-cloud-name') {
+      console.error('❌ Configuration Cloudinary invalide:', { cloudName });
+      onMessage('Configuration Cloudinary manquante ou invalide', 'error');
       return;
     }
+
+    if (!apiKey) {
+      console.error('❌ API Key Cloudinary manquante');
+      onMessage('API Key Cloudinary manquante', 'error');
+      return;
+    }
+
+    const remainingSlots = MAX_PHOTOS - localPhotos.length;
+    let uploadedCount = 0;
+    let totalSelected = 0;
 
     const widget = window.cloudinary.createUploadWidget(
       {
         cloudName: cloudName,
-        uploadPreset: uploadPreset,
+        // Pour les uploads signés, pas de uploadPreset
         sources: ['local', 'camera', 'image_search', 'url'],
         multiple: true,
-        maxFiles: 6 - localPhotos.length,
+        maxFiles: remainingSlots,
         maxFileSize: 10000000, // 10MB
         resourceType: 'image',
-        clientAllowedFormats: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
+        clientAllowedFormats: ['jpg', 'jpeg', 'png', 'gif'],
         maxImageWidth: 2000,
         maxImageHeight: 2000,
-        cropping: true,
-        croppingAspectRatio: 1,
+        cropping: false,
         folder: 'dating_app_photos',
         theme: 'minimal',
+        // Compression automatique forte
+        eager: [
+          { quality: 'auto:low', fetch_format: 'auto' }
+        ],
+        transformation: [
+          { quality: 'auto:eco', fetch_format: 'auto' }
+        ],
+        // Configuration pour upload signé
+        apiKey: apiKey,
+        uploadSignature: generateSignature,
+        text: {
+          fr: {
+            or: 'ou',
+            back: 'Retour',
+            close: 'Fermer',
+            no_results: 'Aucun résultat',
+            search_placeholder: 'Rechercher...',
+            about_uw: 'À propos du widget',
+            search: {
+              placeholder: 'Rechercher des images...',
+              reset: 'Réinitialiser'
+            },
+            menu: {
+              files: 'Mes fichiers',
+              web: 'Adresse Web',
+              camera: 'Caméra',
+              url: 'URL',
+              image_search: 'Recherche d\'images'
+            },
+            local: {
+              browse: 'Parcourir',
+              main_title: 'Télécharger des fichiers',
+              dd_title_single: 'Glissez une image ici',
+              dd_title_multi: `Glissez jusqu'à ${remainingSlots} images ici`,
+              drop_title_single: 'Déposez l\'image pour la télécharger',
+              drop_title_multi: 'Déposez les images pour les télécharger'
+            },
+            url: {
+              main_title: 'Adresse Web distante',
+              inner_title: 'URL publique de l\'image :',
+              input_placeholder: 'https://exemple.com/image.jpg'
+            },
+            camera: {
+              main_title: 'Prendre une photo',
+              capture: 'Capturer',
+              cancel: 'Annuler',
+              take_pic: 'Prendre une photo',
+              explanation: 'Assurez-vous que votre caméra est connectée et que vous avez autorisé l\'accès.',
+              camera_error: 'Impossible d\'accéder à la caméra',
+              retry: 'Réessayer',
+              file_name: 'Photo_Camera'
+            },
+            image_search: {
+              main_title: 'Recherche d\'images',
+              inputPlaceholder: 'Rechercher des images...',
+              customPlaceholder: 'Rechercher...',
+              show_more: 'Voir plus'
+            },
+            queue: {
+              title: 'File d\'attente',
+              title_uploading: 'Téléchargement des fichiers',
+              title_uploading_with_counter: 'Téléchargement de {{num}} fichier(s)...',
+              mini_title: 'Téléchargé',
+              mini_title_uploading: 'Téléchargement...',
+              mini_title_processing: 'Traitement...',
+              show_completed: 'Afficher les fichiers terminés',
+              retry_failed: 'Réessayer les échecs',
+              abort_all: 'Tout annuler',
+              upload_more: 'Ajouter d\'autres fichiers',
+              done: 'Terminé',
+              statuses: {
+                uploading: 'Téléchargement...',
+                processing: 'Traitement...',
+                timeout: 'Délai dépassé',
+                error: 'Erreur',
+                uploaded: 'Terminé',
+                aborted: 'Annulé'
+              }
+            },
+            crop: {
+              title: 'Recadrer',
+              crop_btn: 'Recadrer',
+              skip_btn: 'Passer',
+              reset_btn: 'Réinitialiser',
+              close_btn: 'Fermer',
+              close_prompt: 'Fermer annulera tous les téléchargements. Êtes-vous sûr ?',
+              no_image: 'Aucune image sélectionnée'
+            },
+            actions: {
+              upload: 'Télécharger',
+              next: 'Suivant',
+              clear_all: 'Tout effacer',
+              log_out: 'Se déconnecter'
+            },
+            notifications: {
+              general_error: 'Une erreur s\'est produite',
+              general_prompt: 'Êtes-vous sûr ?',
+              limit_reached: 'Limite atteinte',
+              invalid_add_url: 'URL invalide',
+              invalid_public_id: 'ID public invalide',
+              no_new_files: 'Les fichiers ont déjà été téléchargés',
+              image_purchased: 'Image achetée',
+              video_purchased: 'Vidéo achetée',
+              purchase_failed: 'Achat échoué. Veuillez réessayer.',
+              service_logged_out: 'Service déconnecté en raison d\'une erreur',
+              great: 'Super',
+              image_search_blurb: 'Images fournies par',
+              search_ok: 'OK'
+            },
+            errors: {
+              file_too_large: 'Fichier trop volumineux ({{size}} Mo max)',
+              allowed_formats: 'Format non autorisé. Formats acceptés : JPEG, PNG, GIF',
+              max_number_of_files: 'Nombre maximum de fichiers atteint',
+              not_allowed: 'Action non autorisée'
+            }
+          }
+        },
+        language: 'fr',
         styles: {
           palette: {
             window: '#ffffff',
@@ -113,32 +290,71 @@ const PhotosManager: React.FC<PhotosManagerProps> = ({ photos, onMessage }) => {
             action: '#ec4899',
             inProgress: '#ec4899',
             complete: '#10b981',
-            error: '#ef4444'
+            error: '#ef4444',
+            textDark: '#1f2937',
+            textLight: '#6b7280'
+          },
+          fonts: {
+            default: null,
+            "'Inter', sans-serif": {
+              url: 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap',
+              active: true
+            }
           }
         }
       },
       (error: any, result: any) => {
         if (error) {
-          console.error('❌ Erreur widget Cloudinary:', error);
-          onMessage('Erreur lors de l\'upload', 'error');
+          console.error('❌ Erreur widget Cloudinary:', JSON.stringify(error, null, 2));
+          console.error('❌ Error details:', error?.message || error?.statusText || 'Unknown error');
+          onMessage(`Erreur upload: ${error?.message || error?.statusText || 'Vérifiez votre configuration Cloudinary'}`, 'error');
           setUploading(false);
           return;
         }
 
-        if (result && result.event === 'success') {
-          savePhotoToDatabase(result.info.secure_url);
+        if (result) {
+          console.log('📸 Cloudinary event:', result.event, result);
         }
 
+        // Quand l'utilisateur sélectionne des fichiers
         if (result && result.event === 'queues-start') {
+          totalSelected = result.info?.files?.length || 0;
+          setUploadQueue(totalSelected);
           setUploading(true);
+
+          // Vérifier si trop de fichiers sélectionnés
+          if (totalSelected > remainingSlots) {
+            const skipped = totalSelected - remainingSlots;
+            setSkippedPhotos(skipped);
+            onMessage(`⚠️ ${skipped} photo(s) ignorée(s) - Limite de ${MAX_PHOTOS} photos atteinte`, 'warning');
+          }
+        }
+
+        if (result && result.event === 'success') {
+          uploadedCount++;
+
+          // Vérifier qu'on n'a pas dépassé la limite
+          if (localPhotos.length + uploadedCount <= MAX_PHOTOS) {
+            savePhotoToDatabase(result.info.secure_url);
+          } else {
+            console.warn('⚠️ Photo ignorée - limite atteinte');
+          }
+
+          setUploadQueue(prev => Math.max(0, prev - 1));
         }
 
         if (result && result.event === 'queues-end') {
           setUploading(false);
+          setUploadQueue(0);
+
+          if (skippedPhotos > 0) {
+            setSkippedPhotos(0);
+          }
         }
 
         if (result && result.event === 'close') {
           setUploading(false);
+          setUploadQueue(0);
         }
       }
     );
@@ -166,7 +382,13 @@ const PhotosManager: React.FC<PhotosManagerProps> = ({ photos, onMessage }) => {
       setLocalPhotos(prev => [...prev, savedPhoto]);
       onMessage('Photo ajoutée avec succès !', 'success');
 
-      setTimeout(() => loadPhotosFromAPI(), 1000);
+      // Notifier le parent pour rafraîchir le profil
+      if (onPhotosChange) {
+        onPhotosChange();
+      }
+
+      // Émettre un événement pour mettre à jour la navbar
+      window.dispatchEvent(new CustomEvent('profile-photo-updated'));
 
     } catch (error: any) {
       console.error('❌ Erreur sauvegarde photo:', error);
@@ -189,6 +411,14 @@ const PhotosManager: React.FC<PhotosManagerProps> = ({ photos, onMessage }) => {
 
       setLocalPhotos(prev => prev.filter(p => p.id !== photoId));
       onMessage('Photo supprimée', 'success');
+
+      // Notifier le parent pour rafraîchir le profil
+      if (onPhotosChange) {
+        onPhotosChange();
+      }
+
+      // Émettre un événement pour mettre à jour la navbar
+      window.dispatchEvent(new CustomEvent('profile-photo-updated'));
     } catch (error) {
       console.error('❌ Erreur suppression:', error);
       onMessage('Erreur lors de la suppression', 'error');
@@ -213,24 +443,91 @@ const PhotosManager: React.FC<PhotosManagerProps> = ({ photos, onMessage }) => {
         isPrimary: p.id === photoId
       })));
       onMessage('Photo principale mise à jour', 'success');
+
+      // Notifier le parent pour rafraîchir le profil
+      if (onPhotosChange) {
+        onPhotosChange();
+      }
+
+      // Émettre un événement pour mettre à jour la navbar
+      window.dispatchEvent(new CustomEvent('profile-photo-updated'));
     } catch (error) {
       console.error('❌ Erreur photo principale:', error);
       onMessage('Erreur lors de la mise à jour', 'error');
     }
   };
 
-  const canAddMore = localPhotos.length < 6;
+  const canAddMore = localPhotos.length < MAX_PHOTOS;
+  const remainingSlots = MAX_PHOTOS - localPhotos.length;
+
+  // Navigation pagination
+  const goToPage = (page: number) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+    }
+  };
+
+  // Générer les numéros de page à afficher
+  const getPageNumbers = () => {
+    const pages: (number | string)[] = [];
+    const maxVisiblePages = 5;
+
+    if (totalPages <= maxVisiblePages) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      if (currentPage <= 3) {
+        for (let i = 1; i <= 4; i++) pages.push(i);
+        pages.push('...');
+        pages.push(totalPages);
+      } else if (currentPage >= totalPages - 2) {
+        pages.push(1);
+        pages.push('...');
+        for (let i = totalPages - 3; i <= totalPages; i++) pages.push(i);
+      } else {
+        pages.push(1);
+        pages.push('...');
+        pages.push(currentPage - 1);
+        pages.push(currentPage);
+        pages.push(currentPage + 1);
+        pages.push('...');
+        pages.push(totalPages);
+      }
+    }
+
+    return pages;
+  };
 
   return (
     <div className="form-section">
       {/* Header */}
       <div className="form-section-header">
-        <h2 className="form-section-title">
-          Mes Photos ({localPhotos.length}/6)
-        </h2>
+        <div className="flex items-center gap-2">
+          <h2 className="form-section-title">
+            Mes Photos ({localPhotos.length}/{MAX_PHOTOS})
+          </h2>
+          {isPremium && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gradient-to-r from-amber-400 to-orange-500 text-white text-xs font-semibold rounded-full">
+              <SparklesIcon className="w-3 h-3" />
+              Premium
+            </span>
+          )}
+        </div>
         <p className="form-section-subtitle">
-          Ajoutez vos meilleures photos pour attirer l'attention
+          Ajoutez jusqu'à {MAX_PHOTOS} photos pour attirer l'attention
+          {canAddMore && (
+            <span className="text-pink-500 ml-1">
+              ({remainingSlots} emplacement{remainingSlots > 1 ? 's' : ''} disponible{remainingSlots > 1 ? 's' : ''})
+            </span>
+          )}
         </p>
+        {!isPremium && (
+          <p className="text-xs text-gray-500 mt-1">
+            <SparklesIcon className="w-3 h-3 inline mr-1 text-amber-500" />
+            Passez Premium pour ajouter jusqu'à {MAX_PHOTOS_PREMIUM} photos
+          </p>
+        )}
       </div>
 
       {/* Bouton d'upload Cloudinary */}
@@ -246,7 +543,9 @@ const PhotosManager: React.FC<PhotosManagerProps> = ({ photos, onMessage }) => {
             {uploading ? (
               <div className="flex flex-col items-center justify-center">
                 <div className="loading-spinner mb-3"></div>
-                <span className="text-gray-600 font-medium">Upload en cours...</span>
+                <span className="text-gray-600 font-medium">
+                  Upload en cours...{uploadQueue > 0 && ` (${uploadQueue} restante${uploadQueue > 1 ? 's' : ''})`}
+                </span>
                 <span className="text-sm text-gray-500">Traitement de vos photos</span>
               </div>
             ) : !cloudinaryLoaded ? (
@@ -265,7 +564,10 @@ const PhotosManager: React.FC<PhotosManagerProps> = ({ photos, onMessage }) => {
                   Ajouter des photos
                 </span>
                 <span className="text-gray-500">
-                  Caméra • Galerie • Recherche • URL
+                  Sélectionnez jusqu'à {remainingSlots} photo{remainingSlots > 1 ? 's' : ''}
+                </span>
+                <span className="text-xs text-gray-400 mt-1">
+                  Formats acceptés : JPEG, PNG, GIF
                 </span>
               </div>
             )}
@@ -273,69 +575,141 @@ const PhotosManager: React.FC<PhotosManagerProps> = ({ photos, onMessage }) => {
         </div>
       )}
 
-      {/* Grille des photos */}
+      {/* Grille des photos avec pagination */}
       {localPhotos.length > 0 ? (
-        <div className="photos-grid mb-6">
-          <AnimatePresence>
-            {localPhotos.map((photo, index) => (
-              <motion.div
-                key={photo.id}
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.8 }}
-                whileHover={{ scale: 1.02 }}
-                className="photo-card"
-              >
-                <img
-                  src={photo.url}
-                  alt={`Photo ${index + 1}`}
-                  className="w-full h-full object-cover"
-                />
+        <div className="mb-6">
+          {/* Grille des photos */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-2 rounded-xl">
+            <AnimatePresence mode="popLayout">
+              {paginatedPhotos.map((photo, index) => {
+                const globalIndex = (currentPage - 1) * PHOTOS_PER_PAGE + index;
+                return (
+                  <motion.div
+                    key={photo.id}
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.8 }}
+                    whileHover={{ scale: 1.02 }}
+                    className="photo-card"
+                  >
+                    <img
+                      src={photo.url}
+                      alt={`Photo ${globalIndex + 1}`}
+                      className="w-full h-full object-cover"
+                    />
 
-                {/* Badge photo principale */}
-                {photo.isPrimary && (
-                  <div className="absolute top-3 left-3 bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 shadow-lg">
-                    <StarIcon className="w-3 h-3" />
-                    Principale
-                  </div>
-                )}
-
-                {/* Numéro de la photo */}
-                <div className="absolute top-3 right-3 bg-black/50 text-white w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold">
-                  {index + 1}
-                </div>
-
-                {/* Overlay avec actions */}
-                <div className="photo-overlay">
-                  <div className="absolute bottom-3 left-3 right-3 flex justify-between items-center">
-                    {/* Bouton définir comme principale */}
-                    {!photo.isPrimary && (
-                      <motion.button
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.9 }}
-                        onClick={() => setPrimaryPhoto(photo.id)}
-                        className="bg-white/90 backdrop-blur-sm text-gray-700 p-2.5 rounded-lg hover:bg-white transition-all shadow-lg"
-                        title="Définir comme photo principale"
-                      >
-                        <StarIcon className="w-4 h-4" />
-                      </motion.button>
+                    {/* Badge photo principale */}
+                    {photo.isPrimary && (
+                      <div className="absolute top-3 left-3 bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 shadow-lg">
+                        <StarIcon className="w-3 h-3" />
+                        Principale
+                      </div>
                     )}
 
-                    {/* Bouton supprimer */}
-                    <motion.button
-                      whileHover={{ scale: 1.1 }}
-                      whileTap={{ scale: 0.9 }}
-                      onClick={() => deletePhoto(photo.id)}
-                      className="bg-red-500/90 backdrop-blur-sm text-white p-2.5 rounded-lg hover:bg-red-600 transition-all shadow-lg ml-auto"
-                      title="Supprimer cette photo"
-                    >
-                      <TrashIcon className="w-4 h-4" />
-                    </motion.button>
-                  </div>
-                </div>
-              </motion.div>
-            ))}
-          </AnimatePresence>
+                    {/* Numéro de la photo */}
+                    <div className="absolute top-3 right-3 bg-black/50 text-white w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold">
+                      {globalIndex + 1}
+                    </div>
+
+                    {/* Overlay avec actions */}
+                    <div className="photo-overlay">
+                      <div className="absolute bottom-3 left-3 right-3 flex justify-between items-center">
+                        {/* Bouton définir comme principale */}
+                        {!photo.isPrimary && (
+                          <motion.button
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
+                            onClick={() => setPrimaryPhoto(photo.id)}
+                            className="bg-white/90 backdrop-blur-sm text-gray-700 p-2.5 rounded-lg hover:bg-white transition-all shadow-lg"
+                            title="Définir comme photo principale"
+                          >
+                            <StarIcon className="w-4 h-4" />
+                          </motion.button>
+                        )}
+
+                        {/* Bouton supprimer */}
+                        <motion.button
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.9 }}
+                          onClick={() => deletePhoto(photo.id)}
+                          className="bg-red-500/90 backdrop-blur-sm text-white p-2.5 rounded-lg hover:bg-red-600 transition-all shadow-lg ml-auto"
+                          title="Supprimer cette photo"
+                        >
+                          <TrashIcon className="w-4 h-4" />
+                        </motion.button>
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+          </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-2 mt-6">
+              {/* Bouton précédent */}
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => goToPage(currentPage - 1)}
+                disabled={currentPage === 1}
+                className={`p-2 rounded-lg transition-all ${
+                  currentPage === 1
+                    ? 'text-gray-300 cursor-not-allowed'
+                    : 'text-gray-600 hover:bg-pink-100 hover:text-pink-600'
+                }`}
+              >
+                <ChevronLeftIcon className="w-5 h-5" />
+              </motion.button>
+
+              {/* Numéros de page */}
+              <div className="flex items-center gap-1">
+                {getPageNumbers().map((page, index) => (
+                  <React.Fragment key={index}>
+                    {page === '...' ? (
+                      <span className="px-2 text-gray-400">...</span>
+                    ) : (
+                      <motion.button
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => goToPage(page as number)}
+                        className={`w-10 h-10 rounded-lg font-medium transition-all ${
+                          currentPage === page
+                            ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white shadow-lg'
+                            : 'text-gray-600 hover:bg-pink-100 hover:text-pink-600'
+                        }`}
+                      >
+                        {page}
+                      </motion.button>
+                    )}
+                  </React.Fragment>
+                ))}
+              </div>
+
+              {/* Bouton suivant */}
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => goToPage(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                className={`p-2 rounded-lg transition-all ${
+                  currentPage === totalPages
+                    ? 'text-gray-300 cursor-not-allowed'
+                    : 'text-gray-600 hover:bg-pink-100 hover:text-pink-600'
+                }`}
+              >
+                <ChevronRightIcon className="w-5 h-5" />
+              </motion.button>
+            </div>
+          )}
+
+          {/* Info pagination */}
+          {totalPages > 1 && (
+            <p className="text-center text-sm text-gray-500 mt-2">
+              Page {currentPage} sur {totalPages} • {localPhotos.length} photo{localPhotos.length > 1 ? 's' : ''} au total
+            </p>
+          )}
         </div>
       ) : (
         // État vide
@@ -363,11 +737,17 @@ const PhotosManager: React.FC<PhotosManagerProps> = ({ photos, onMessage }) => {
             <ExclamationTriangleIcon className="w-6 h-6 text-amber-600 flex-shrink-0 mt-0.5" />
             <div>
               <h4 className="font-semibold text-amber-800 mb-1">
-                Limite de photos atteinte
+                Limite de {MAX_PHOTOS} photos atteinte
               </h4>
               <p className="text-amber-700 text-sm">
-                Vous avez ajouté le maximum de 6 photos. Pour en ajouter de nouvelles, 
+                Vous avez ajouté le maximum de {MAX_PHOTOS} photos. Pour en ajouter de nouvelles,
                 supprimez d'abord une photo existante.
+                {!isPremium && (
+                  <span className="block mt-1">
+                    <SparklesIcon className="w-4 h-4 inline mr-1" />
+                    Passez Premium pour avoir jusqu'à {MAX_PHOTOS_PREMIUM} photos !
+                  </span>
+                )}
               </p>
             </div>
           </div>
@@ -385,6 +765,7 @@ const PhotosManager: React.FC<PhotosManagerProps> = ({ photos, onMessage }) => {
           <li>• Variez les types de photos : portrait, corps entier, activités</li>
           <li>• Évitez les filtres trop prononcés</li>
           <li>• Souriez naturellement !</li>
+          <li>• Formats acceptés : JPEG, PNG et GIF uniquement</li>
         </ul>
       </div>
     </div>

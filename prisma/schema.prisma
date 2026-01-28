@@ -101,6 +101,10 @@ model User {
   lastSeen DateTime?
   isOnline Boolean   @default(false)
 
+  // Abonnement Premium
+  isPremium       Boolean   @default(false)
+  premiumExpiresAt DateTime?
+
   // Données existantes
   interests         String[]
   primaryAuthMethod AuthMethod @default(EMAIL_PASSWORD)

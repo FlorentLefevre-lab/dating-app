@@ -215,6 +215,7 @@ export async function GET(request: NextRequest) {
       photos: user.photos,
       preferences: user.preferences,
       accountStatus: user.accountStatus, // ✅ AJOUT CRUCIAL
+      isPremium: user.isPremium || false, // ✅ Statut premium pour les limites de photos
       createdAt: user.createdAt,
       updatedAt: user.updatedAt
     };

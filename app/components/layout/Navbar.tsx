@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useRouter, usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ChatBubbleLeftRightIcon } from '@heroicons/react/24/outline'
 import { ChatBubbleLeftRightIcon as ChatBubbleLeftRightIconSolid } from '@heroicons/react/24/solid'
 import { ChatNavItem } from './ChatNavItem'
@@ -14,6 +14,39 @@ export default function Navbar() {
   const pathname = usePathname()
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [profilePhoto, setProfilePhoto] = useState<string | null>(null)
+
+  // Charger la photo de profil
+  useEffect(() => {
+    const loadProfilePhoto = async () => {
+      if (status !== 'authenticated') return
+
+      try {
+        const response = await fetch('/api/profile/photos')
+        if (response.ok) {
+          const data = await response.json()
+          const photos = data.photos || []
+          // Trouver la photo principale ou prendre la première
+          const primaryPhoto = photos.find((p: any) => p.isPrimary) || photos[0]
+          if (primaryPhoto?.url) {
+            setProfilePhoto(primaryPhoto.url)
+          }
+        }
+      } catch (error) {
+        console.error('Erreur chargement photo navbar:', error)
+      }
+    }
+
+    loadProfilePhoto()
+
+    // Écouter les événements de mise à jour de photo
+    const handlePhotoUpdate = () => loadProfilePhoto()
+    window.addEventListener('profile-photo-updated', handlePhotoUpdate)
+
+    return () => {
+      window.removeEventListener('profile-photo-updated', handlePhotoUpdate)
+    }
+  }, [status])
 
   // ✅ ROUTES SANS NAVBAR - CORRIGÉES
   const routesWithoutNavbar = [
@@ -179,9 +212,18 @@ export default function Navbar() {
               onClick={() => setShowUserMenu(!showUserMenu)}
               className="flex items-center gap-3 p-2 rounded-xl hover:bg-gray-50 transition-all duration-200"
             >
-              <div className="w-10 h-10 bg-gradient-to-br from-pink-400 to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-lg">
-                {session.user?.name?.[0]?.toUpperCase() || 'U'}
-              </div>
+              {profilePhoto ? (
+                <img
+                  src={profilePhoto}
+                  alt="Photo de profil"
+                  className="w-10 h-10 rounded-full object-cover shadow-lg border-2 border-pink-200"
+                  onError={() => setProfilePhoto(null)}
+                />
+              ) : (
+                <div className="w-10 h-10 bg-gradient-to-br from-pink-400 to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-lg">
+                  {session.user?.name?.[0]?.toUpperCase() || 'U'}
+                </div>
+              )}
               <span className="hidden md:block font-medium text-gray-700">
                 {session.user?.name || 'Utilisateur'}
               </span>

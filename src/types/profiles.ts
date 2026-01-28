@@ -51,6 +51,7 @@ export interface UserProfile {
   lastLoginAt?: string;
   isVerified?: boolean;
   isActive?: boolean;
+  isPremium?: boolean;
 }
 
 // Types pour les données de formulaire
@@ -103,6 +104,7 @@ export interface SettingsPanelProps {
   photos: Photo[];
   session: any;
   onMessage: (message: string, type?: MessageType) => void;
+  isPremium?: boolean;
 }
 
 // Types pour l'API
@@ -248,6 +250,7 @@ export interface ProfileFormProps {
 export interface PhotosManagerProps {
   photos: Photo[];
   maxPhotos?: number;
+  isPremium?: boolean;
   onMessage: (message: string, type: MessageType) => void;
   onPhotosChange?: () => void;
   uploadConfig?: {
@@ -262,6 +265,7 @@ export interface SettingsPanelProps {
   photos: Photo[];
   session: any;
   onMessage: (message: string, type?: MessageType) => void;
+  isPremium?: boolean;
 }
 
 // ==================== CONFIGURATION CLOUDINARY ====================

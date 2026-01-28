@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { getMaxPhotos } from '@/lib/config/photos';
 import { motion } from 'framer-motion';
 import { useSession } from 'next-auth/react';
 import { 
@@ -51,13 +52,16 @@ interface ProfileOverviewProps {
   profile: UserProfile | null;
   onTabChange?: (tab: TabType) => void;
   onMessage?: (text: string, type: MessageType) => void;
+  isPremium?: boolean;
 }
 
-const ProfileOverview: React.FC<ProfileOverviewProps> = ({ 
-  profile, 
+const ProfileOverview: React.FC<ProfileOverviewProps> = ({
+  profile,
   onTabChange = () => {},
-  onMessage = () => {}
+  onMessage = () => {},
+  isPremium = false
 }) => {
+  const maxPhotos = getMaxPhotos(isPremium);
   const { data: session } = useSession();
   
   // État pour les statistiques
@@ -174,9 +178,10 @@ const ProfileOverview: React.FC<ProfileOverviewProps> = ({
                 {mainPhoto ? (
                   <div className="relative">
                     <img
-                      src={mainPhoto.url}
+                      src={`${mainPhoto.url}?v=${mainPhoto.id}`}
                       alt="Photo de profil"
                       className="w-24 h-24 rounded-xl object-cover shadow-lg"
+                      key={mainPhoto.id}
                       onError={(e) => {
                         console.error('Erreur chargement image:', mainPhoto.url);
                         e.currentTarget.style.display = 'none';
@@ -386,7 +391,7 @@ const ProfileOverview: React.FC<ProfileOverviewProps> = ({
                   {profile.photos?.length || 0}
                 </div>
                 <div className="text-sm text-pink-600 font-medium">Photos</div>
-                <div className="text-xs text-pink-500 mt-1">sur 6 max</div>
+                <div className="text-xs text-pink-500 mt-1">sur {maxPhotos} max</div>
               </motion.div>
 
               {/* Vues totales */}
@@ -471,7 +476,7 @@ const ProfileOverview: React.FC<ProfileOverviewProps> = ({
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                 <PhotoIcon className="w-5 h-5 text-pink-500" />
-                Photos ({profile.photos?.length || 0}/6)
+                Photos ({profile.photos?.length || 0}/{maxPhotos})
               </h2>
               <motion.button
                 whileHover={{ scale: 1.05 }}
@@ -497,9 +502,10 @@ const ProfileOverview: React.FC<ProfileOverviewProps> = ({
                   <div className="mb-4">
                     <div className="aspect-square rounded-xl overflow-hidden bg-gray-100 relative shadow-lg">
                       <img
-                        src={mainPhoto.url}
+                        src={`${mainPhoto.url}?v=${mainPhoto.id}`}
                         alt="Photo principale"
                         className="w-full h-full object-cover"
+                        key={`main-${mainPhoto.id}`}
                         onError={(e) => {
                           console.error('Erreur chargement photo principale:', mainPhoto.url);
                         }}
@@ -524,9 +530,10 @@ const ProfileOverview: React.FC<ProfileOverviewProps> = ({
                         className="aspect-square rounded-lg overflow-hidden bg-gray-100 relative shadow-sm"
                       >
                         <img
-                          src={photo.url}
+                          src={`${photo.url}?v=${photo.id}`}
                           alt={`Photo ${index + 1}`}
                           className="w-full h-full object-cover"
+                          key={`thumb-${photo.id}`}
                           onError={(e) => {
                             console.error(`Erreur chargement photo ${index + 1}:`, photo.url);
                           }}

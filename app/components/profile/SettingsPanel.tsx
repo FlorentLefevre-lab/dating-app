@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { signOut } from 'next-auth/react';
-import { 
+import {
   ExclamationTriangleIcon,
   ShieldCheckIcon,
   UserCircleIcon,
@@ -15,12 +15,16 @@ import {
 
 import { SettingsPanelProps } from '../../types/profiles';
 import { useAccountActions } from '@/hooks/useAccountActions';
-const SettingsPanel: React.FC<SettingsPanelProps> = ({ 
-  profile, 
-  photos, 
-  session, 
-  onMessage
+import { getMaxPhotos } from '@/lib/config/photos';
+
+const SettingsPanel: React.FC<SettingsPanelProps> = ({
+  profile,
+  photos,
+  session,
+  onMessage,
+  isPremium = false
 }) => {
+  const maxPhotos = getMaxPhotos(isPremium);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showSuspendModal, setShowSuspendModal] = useState(false);
   const [showReactivateModal, setShowReactivateModal] = useState(false);
@@ -384,7 +388,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               </div>
               <div>
                 <div className="text-sm font-medium text-gray-500">Nombre de photos</div>
-                <div className="text-gray-800">{photos.length}/6</div>
+                <div className="text-gray-800">{photos.length}/{maxPhotos}</div>
               </div>
               <div>
                 <div className="text-sm font-medium text-gray-500">Statut du compte</div>

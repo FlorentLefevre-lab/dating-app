@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "Bash(findstr:*)",
-      "Bash(test:*)"
+      "Bash(test:*)",
+      "Bash(npm install:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx prisma db push:*)",
+      "Bash(npx prisma generate:*)"
     ]
   }
 }

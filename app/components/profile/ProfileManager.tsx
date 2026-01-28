@@ -467,10 +467,11 @@ const ProfileManager: React.FC = () => {
             className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden"
           >
             {activeTab === 'overview' && (
-              <ProfileOverview 
+              <ProfileOverview
                 profile={profile}
                 onTabChange={setActiveTab}
                 onMessage={showMessage}
+                isPremium={profile?.isPremium || false}
               />
             )}
 
@@ -493,10 +494,11 @@ const ProfileManager: React.FC = () => {
             )}
 
             {activeTab === 'photos' && (
-              <PhotosManager 
+              <PhotosManager
                 photos={profile?.photos || []}
                 onMessage={showMessage}
                 onPhotosChange={() => loadProfile()}
+                isPremium={profile?.isPremium || false}
               />
             )}
 
@@ -509,11 +511,12 @@ const ProfileManager: React.FC = () => {
             )}
 
             {activeTab === 'settings' && (
-              <SettingsPanel 
+              <SettingsPanel
                 profile={profile}
                 photos={profile?.photos || []}
                 session={session}
                 onMessage={showMessage}
+                isPremium={profile?.isPremium || false}
               />
             )}
           </motion.div>

@@ -116,11 +116,23 @@ export async function closeRedis(): Promise<void> {
 
 /**
  * Check if Redis is connected and healthy
+ * Returns false if Redis is not available (never throws)
  */
 export async function isRedisHealthy(): Promise<boolean> {
   try {
-    const client = getRedisClient();
-    const result = await client.ping();
+    if (!redisInstance) {
+      return false;
+    }
+    // Check if client is in a usable state
+    if (redisInstance.status !== 'ready' && redisInstance.status !== 'connect') {
+      return false;
+    }
+    const result = await Promise.race([
+      redisInstance.ping(),
+      new Promise<null>((_, reject) =>
+        setTimeout(() => reject(new Error('Redis ping timeout')), 1000)
+      )
+    ]);
     return result === 'PONG';
   } catch {
     return false;

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { PrismaClient } from '@prisma/client';
+import { getMaxPhotos } from '@/lib/config/photos';
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -13,7 +14,7 @@ if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
 export async function POST(request: NextRequest) {
   try {
     const session = await auth();
-    
+
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });
     }
@@ -43,9 +44,15 @@ export async function POST(request: NextRequest) {
 
     console.log('Nombre de photos existantes:', existingPhotos);
 
-    if (existingPhotos >= 6) {
-      console.log('Erreur: Maximum 6 photos atteint');
-      return NextResponse.json({ error: 'Maximum 6 photos autorisées' }, { status: 400 });
+    // Vérifier la limite selon le statut premium de l'utilisateur
+    const isPremium = (user as any).isPremium || false;
+    const maxPhotos = getMaxPhotos(isPremium);
+
+    if (existingPhotos >= maxPhotos) {
+      console.log(`Erreur: Maximum ${maxPhotos} photos atteint (Premium: ${isPremium})`);
+      return NextResponse.json({
+        error: `Maximum ${maxPhotos} photos autorisées${!isPremium ? '. Passez Premium pour en ajouter plus !' : ''}`
+      }, { status: 400 });
     }
 
     const photo = await prisma.photo.create({
@@ -89,7 +96,16 @@ export async function GET(request: NextRequest) {
       ]
     });
 
-    return NextResponse.json({ photos }, { status: 200 });
+    // Inclure les infos de limite dans la réponse
+    const isPremium = (user as any).isPremium || false;
+    const maxPhotos = getMaxPhotos(isPremium);
+
+    return NextResponse.json({
+      photos,
+      isPremium,
+      maxPhotos,
+      remaining: Math.max(0, maxPhotos - photos.length)
+    }, { status: 200 });
 
   } catch (error) {
     console.error('Erreur GET photos:', error);
