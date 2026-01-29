@@ -11,7 +11,8 @@
       "Bash(xargs:*)",
       "Bash(taskkill:*)",
       "Bash(npm run dev:*)",
-      "Bash(timeout:*)"
+      "Bash(timeout:*)",
+      "Bash(if exist .next rmdir /s /q .next)"
     ]
   }
 }

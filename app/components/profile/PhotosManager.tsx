@@ -10,11 +10,13 @@ import {
   CameraIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
-  SparklesIcon
+  SparklesIcon,
+  ShieldCheckIcon
 } from '@heroicons/react/24/outline';
 
 import { Photo, PhotosManagerProps } from '@/types/profiles';
 import { PHOTO_CONFIG, getMaxPhotos } from '@/lib/config/photos';
+import PhotoUploadPreview from './PhotoUploadPreview';
 
 // Déclaration TypeScript pour Cloudinary
 declare global {
@@ -50,6 +52,7 @@ const PhotosManager: React.FC<PhotosManagerProps> = ({
   const [uploadQueue, setUploadQueue] = useState<number>(0);
   const [skippedPhotos, setSkippedPhotos] = useState<number>(0);
   const [currentPage, setCurrentPage] = useState(1);
+  const [showUploadPreview, setShowUploadPreview] = useState(false);
 
   // Calcul du max photos selon le statut premium (depuis config centralisée)
   const MAX_PHOTOS = getMaxPhotos(isPremium);
@@ -115,6 +118,66 @@ const PhotosManager: React.FC<PhotosManagerProps> = ({
     } catch (error) {
       console.error('❌ Erreur chargement photos:', error);
     }
+  };
+
+  // Uploader les fichiers validés par NSFW.js vers Cloudinary
+  const uploadValidatedFiles = async (files: File[]) => {
+    setUploading(true);
+    setUploadQueue(files.length);
+
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const file of files) {
+      // Vérifier qu'on n'a pas dépassé la limite
+      if (localPhotos.length + successCount >= MAX_PHOTOS) {
+        console.warn('⚠️ Limite de photos atteinte');
+        break;
+      }
+
+      try {
+        // Uploader vers Cloudinary via notre API
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const uploadResponse = await fetch('/api/cloudinary/upload', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!uploadResponse.ok) {
+          const error = await uploadResponse.json();
+          throw new Error(error.error || 'Erreur upload');
+        }
+
+        const { url } = await uploadResponse.json();
+
+        // Sauvegarder en base de données
+        await savePhotoToDatabase(url);
+        successCount++;
+
+      } catch (error: any) {
+        console.error('❌ Erreur upload fichier:', error);
+        errorCount++;
+      }
+
+      setUploadQueue(prev => Math.max(0, prev - 1));
+    }
+
+    setUploading(false);
+    setUploadQueue(0);
+
+    if (successCount > 0) {
+      onMessage(`${successCount} photo${successCount > 1 ? 's' : ''} ajoutée${successCount > 1 ? 's' : ''} avec succès !`, 'success');
+    }
+    if (errorCount > 0) {
+      onMessage(`${errorCount} photo${errorCount > 1 ? 's' : ''} n'ont pas pu être uploadée${errorCount > 1 ? 's' : ''}`, 'error');
+    }
+  };
+
+  // Ouvrir le modal de prévisualisation NSFW
+  const openUploadPreview = () => {
+    setShowUploadPreview(true);
   };
 
   // Ouvrir le widget Cloudinary
@@ -530,15 +593,15 @@ const PhotosManager: React.FC<PhotosManagerProps> = ({
         )}
       </div>
 
-      {/* Bouton d'upload Cloudinary */}
+      {/* Bouton d'upload avec protection NSFW */}
       {canAddMore && (
         <div className="mb-8">
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
-            onClick={openCloudinaryWidget}
-            disabled={uploading || !cloudinaryLoaded}
-            className={`upload-area ${uploading || !cloudinaryLoaded ? 'disabled' : ''}`}
+            onClick={openUploadPreview}
+            disabled={uploading}
+            className={`upload-area ${uploading ? 'disabled' : ''}`}
           >
             {uploading ? (
               <div className="flex flex-col items-center justify-center">
@@ -547,12 +610,6 @@ const PhotosManager: React.FC<PhotosManagerProps> = ({
                   Upload en cours...{uploadQueue > 0 && ` (${uploadQueue} restante${uploadQueue > 1 ? 's' : ''})`}
                 </span>
                 <span className="text-sm text-gray-500">Traitement de vos photos</span>
-              </div>
-            ) : !cloudinaryLoaded ? (
-              <div className="flex flex-col items-center justify-center">
-                <div className="animate-pulse rounded-full h-8 w-8 bg-gray-300 mb-3"></div>
-                <span className="text-gray-600 font-medium">Chargement...</span>
-                <span className="text-sm text-gray-500">Préparation du widget photo</span>
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center">
@@ -566,6 +623,10 @@ const PhotosManager: React.FC<PhotosManagerProps> = ({
                 <span className="text-gray-500">
                   Sélectionnez jusqu'à {remainingSlots} photo{remainingSlots > 1 ? 's' : ''}
                 </span>
+                <div className="flex items-center gap-1 text-xs text-green-600 mt-2">
+                  <ShieldCheckIcon className="w-4 h-4" />
+                  <span>Protection contre le contenu inapproprié</span>
+                </div>
                 <span className="text-xs text-gray-400 mt-1">
                   Formats acceptés : JPEG, PNG, GIF
                 </span>
@@ -768,6 +829,15 @@ const PhotosManager: React.FC<PhotosManagerProps> = ({
           <li>• Formats acceptés : JPEG, PNG et GIF uniquement</li>
         </ul>
       </div>
+
+      {/* Modal de prévisualisation avec validation NSFW */}
+      <PhotoUploadPreview
+        isOpen={showUploadPreview}
+        onClose={() => setShowUploadPreview(false)}
+        onUpload={uploadValidatedFiles}
+        maxFiles={PHOTO_CONFIG.maxPhotosFree}
+        remainingSlots={remainingSlots}
+      />
     </div>
   );
 };
