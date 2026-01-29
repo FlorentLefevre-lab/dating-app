@@ -13,7 +13,14 @@
       "Bash(npx prisma generate)",
       "Bash(powershell:*)",
       "Bash(npx prisma migrate:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(xargs:*)",
+      "Bash(npm ls:*)",
+      "Bash(npm install:*)",
+      "Bash(timeout 30 npm run dev:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "WebSearch"
     ]
   }
 }
