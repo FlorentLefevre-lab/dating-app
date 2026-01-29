@@ -3,25 +3,7 @@
 
 import { useState } from 'react'
 import { Button, Card } from '@/components/ui'
-
-interface StatsData {
-  profileViews: number;
-  likesReceived: number;
-  matchesCount: number;
-  messagesReceived: number;
-  dailyStats: {
-    profileViews: number;
-    likesReceived: number;
-    matchesCount: number;
-    messagesReceived: number;
-  };
-  totalStats?: {
-    profileViews: number;
-    likesReceived: number;
-    matchesCount: number;
-    messagesReceived: number;
-  };
-}
+import { StatsData } from '@/hooks/useStats'
 
 interface StatsDashboardProps {
   className?: string
@@ -46,53 +28,67 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({
 }) => {
   const [expanded, setExpanded] = useState(showDetailedStats)
 
+  // 🔥 DEBUG: Afficher les stats reçues
+  console.log('📊 [StatsDashboard] Props reçues:', {
+    stats,
+    isLoading,
+    error,
+    lastUpdated
+  })
+
   // ✅ Valeurs par défaut si pas de stats
-  const defaultStats = {
+  const defaultStats: StatsData = {
     profileViews: 0,
     likesReceived: 0,
     matchesCount: 0,
-    messagesReceived: 0,
     dailyStats: {
       profileViews: 0,
       likesReceived: 0,
-      matchesCount: 0,
-      messagesReceived: 0
+      matchesCount: 0
+    },
+    matchStats: {
+      totalMatches: 0,
+      newMatches: 0,
+      activeConversations: 0,
+      dormantMatches: 0,
+      averageResponseTime: '0h',
+      thisWeekMatches: 0
     }
   }
 
   const currentStats = stats || defaultStats
 
   const getDetailedStats = () => [
-    { 
-      label: 'Profil vu cette semaine', 
-      value: (currentStats.totalStats?.profileViews || currentStats.profileViews).toString(), 
-      icon: '👀', 
+    {
+      label: 'Profil vu (total)',
+      value: (currentStats.totalStats?.profileViews || currentStats.profileViews).toString(),
+      icon: '👀',
       color: 'text-blue-600',
       change: '+12%',
       trend: 'up'
     },
-    { 
-      label: 'Likes reçus ce mois', 
-      value: (currentStats.totalStats?.likesReceived || currentStats.likesReceived).toString(), 
-      icon: '💗', 
+    {
+      label: 'Likes reçus (total)',
+      value: (currentStats.totalStats?.likesReceived || currentStats.likesReceived).toString(),
+      icon: '💗',
       color: 'text-pink-600',
       change: '+23%',
       trend: 'up'
     },
-    { 
-      label: 'Messages reçus', 
-      value: (currentStats.totalStats?.messagesReceived || currentStats.messagesReceived).toString(), 
-      icon: '💬', 
+    {
+      label: 'Conversations actives',
+      value: (currentStats.matchStats?.activeConversations || 0).toString(),
+      icon: '💬',
       color: 'text-green-600',
-      change: '+8%',
+      change: `${currentStats.matchStats?.newMatches || 0} nouveau(x)`,
       trend: 'up'
     },
-    { 
-      label: 'Matches actifs', 
-      value: currentStats.matchesCount.toString(), 
-      icon: '🔥', 
+    {
+      label: 'Matches actifs',
+      value: (currentStats.matchStats?.totalMatches || currentStats.matchesCount).toString(),
+      icon: '🔥',
       color: 'text-orange-600',
-      change: '+2',
+      change: `${currentStats.matchStats?.thisWeekMatches || 0} cette semaine`,
       trend: 'up'
     }
   ]
@@ -155,23 +151,23 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({
       {/* Stats rapides */}
       <div className="space-y-4">
         {[
-          { 
-            label: 'Profil vu aujourd\'hui', 
-            value: currentStats.dailyStats.profileViews.toString(), 
-            icon: '👀', 
-            color: 'text-blue-600' 
+          {
+            label: 'Profil vu aujourd\'hui',
+            value: (currentStats.dailyStats?.profileViews || 0).toString(),
+            icon: '👀',
+            color: 'text-blue-600'
           },
-          { 
-            label: 'Likes reçus', 
-            value: currentStats.dailyStats.likesReceived.toString(), 
-            icon: '💗', 
-            color: 'text-pink-600' 
+          {
+            label: 'Likes reçus',
+            value: (currentStats.dailyStats?.likesReceived || 0).toString(),
+            icon: '💗',
+            color: 'text-pink-600'
           },
-          { 
-            label: 'Messages reçus', 
-            value: currentStats.dailyStats.messagesReceived.toString(), 
-            icon: '💬', 
-            color: 'text-green-600' 
+          {
+            label: 'Conversations actives',
+            value: (currentStats.matchStats?.activeConversations || 0).toString(),
+            icon: '💬',
+            color: 'text-green-600'
           }
         ].map((stat, index) => (
           <div key={index} className="flex items-center justify-between group hover:bg-gray-50 p-2 rounded-lg transition-colors">
@@ -238,19 +234,19 @@ export const StatsDashboard: React.FC<StatsDashboardProps> = ({
               💡 Analyse de performance
             </h5>
             <div className="space-y-1 text-xs text-blue-700">
-              {currentStats.dailyStats.profileViews > 20 && (
+              {(currentStats.dailyStats?.profileViews || 0) > 20 && (
                 <p>🔥 Votre profil attire beaucoup d'attention aujourd'hui !</p>
               )}
-              {currentStats.dailyStats.likesReceived > 5 && (
+              {(currentStats.dailyStats?.likesReceived || 0) > 5 && (
                 <p>💖 Excellent taux de likes aujourd'hui</p>
               )}
-              {currentStats.matchesCount > 10 && (
+              {(currentStats.matchStats?.totalMatches || currentStats.matchesCount || 0) > 10 && (
                 <p>⭐ Vous avez un bon nombre de matches actifs</p>
               )}
-              {currentStats.dailyStats.messagesReceived === 0 && (
+              {(currentStats.matchStats?.activeConversations || 0) === 0 && (currentStats.matchStats?.totalMatches || 0) > 0 && (
                 <p>💬 Pensez à engager la conversation avec vos matches</p>
               )}
-              {currentStats.dailyStats.profileViews === 0 && currentStats.dailyStats.likesReceived === 0 && (
+              {(currentStats.dailyStats?.profileViews || 0) === 0 && (currentStats.dailyStats?.likesReceived || 0) === 0 && (
                 <p>📈 Essayez de vous connecter plus souvent pour augmenter votre visibilité</p>
               )}
             </div>

@@ -390,33 +390,33 @@ export default function HomePage() {
 
   // 🔥 Actions rapides avec données réelles
   const quickActions = [
-    { 
-      icon: '💬', 
-      label: 'Messages', 
-      href: '/messages',
-      count: 0, // TODO: Ajouter vraies données de messages
+    {
+      icon: '💬',
+      label: 'Messages',
+      href: '/chat',
+      count: stats?.matchStats?.activeConversations || 0,
       color: 'from-blue-500 to-blue-600',
-      description: 'Nouveaux messages'
+      description: 'Conversations actives'
     },
-    { 
-      icon: '💖', 
-      label: 'Matchs', 
+    {
+      icon: '💖',
+      label: 'Matchs',
       href: '/matches',
-      count: stats?.totalStats?.matchesCount || stats?.matchesCount || 0,
+      count: stats?.matchStats?.totalMatches || stats?.matchesCount || 0,
       color: 'from-pink-500 to-pink-600',
-      description: 'Matches actifs'
+      description: `${stats?.matchStats?.newMatches || 0} nouveau(x) aujourd'hui`
     },
-    { 
-      icon: '👀', 
-      label: 'Visites', 
-      href: '/profile/visits',
+    {
+      icon: '👀',
+      label: 'Visites',
+      href: '/profile',
       count: stats?.dailyStats?.profileViews || 0,
       color: 'from-purple-500 to-purple-600',
       description: 'Vues aujourd\'hui'
     },
-    { 
-      icon: '⚙️', 
-      label: 'Profil', 
+    {
+      icon: '⚙️',
+      label: 'Profil',
       href: '/profile',
       color: 'from-gray-500 to-gray-600',
       description: 'Gérer mon profil'
@@ -508,7 +508,7 @@ export default function HomePage() {
                   <div className="spinner-sm"></div>
                 )}
               </h3>
-              
+
               <div className="grid grid-cols-2 gap-3 mb-6">
                 <div className="text-center p-3 bg-blue-50 rounded-lg">
                   <div className="text-2xl font-bold text-blue-600">
@@ -520,7 +520,7 @@ export default function HomePage() {
                   </div>
                   <div className="text-xs text-blue-700">Vues aujourd&apos;hui</div>
                 </div>
-                
+
                 <div className="text-center p-3 bg-pink-50 rounded-lg">
                   <div className="text-2xl font-bold text-pink-600">
                     {statsLoading ? (
@@ -531,52 +531,83 @@ export default function HomePage() {
                   </div>
                   <div className="text-xs text-pink-700">Likes reçus</div>
                 </div>
-                
+
                 <div className="text-center p-3 bg-green-50 rounded-lg">
                   <div className="text-2xl font-bold text-green-600">
                     {statsLoading ? (
                       <div className="animate-pulse">...</div>
                     ) : (
-                      0 // TODO: Ajouter messages reçus
+                      stats?.matchStats?.activeConversations || 0
                     )}
                   </div>
-                  <div className="text-xs text-green-700">Messages reçus</div>
+                  <div className="text-xs text-green-700">Conversations actives</div>
                 </div>
-                
+
                 <div className="text-center p-3 bg-orange-50 rounded-lg">
                   <div className="text-2xl font-bold text-orange-600">
                     {statsLoading ? (
                       <div className="animate-pulse">...</div>
                     ) : (
-                      stats?.totalStats?.matchesCount || stats?.matchesCount || 0
+                      stats?.matchStats?.totalMatches || stats?.matchesCount || 0
                     )}
                   </div>
                   <div className="text-xs text-orange-700">Matches total</div>
                 </div>
               </div>
 
-              {/* Performance du jour */}
+              {/* Stats de matches détaillées */}
               <div className="mb-6 pt-4 border-t border-gray-200">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600">Performance du jour</span>
-                  <span className={`font-medium ${
-                    ((stats?.dailyStats?.profileViews || 0) + (stats?.dailyStats?.likesReceived || 0)) > 5 
-                      ? 'text-green-600' : 'text-yellow-600'
-                  }`}>
-                    {((stats?.dailyStats?.profileViews || 0) + (stats?.dailyStats?.likesReceived || 0)) > 5 
-                      ? '🔥 Excellente' : '📈 Moyenne'}
-                  </span>
+                <h4 className="text-sm font-medium text-gray-700 mb-3">📊 Activité des matches</h4>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600 flex items-center gap-2">
+                      <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                      Nouveaux aujourd&apos;hui
+                    </span>
+                    <span className="font-semibold text-green-600">
+                      {statsLoading ? '...' : (stats?.matchStats?.newMatches || 0)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600 flex items-center gap-2">
+                      <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                      Cette semaine
+                    </span>
+                    <span className="font-semibold text-blue-600">
+                      {statsLoading ? '...' : (stats?.matchStats?.thisWeekMatches || 0)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600 flex items-center gap-2">
+                      <span className="w-2 h-2 bg-yellow-500 rounded-full"></span>
+                      En attente
+                    </span>
+                    <span className="font-semibold text-yellow-600">
+                      {statsLoading ? '...' : (stats?.matchStats?.dormantMatches || 0)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600 flex items-center gap-2">
+                      ⏱️ Temps de réponse moy.
+                    </span>
+                    <span className="font-semibold text-purple-600">
+                      {statsLoading ? '...' : (stats?.matchStats?.averageResponseTime || '0h')}
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              {/* Placeholder activité récente */}
-              <div className="border-t border-gray-200 pt-6">
-                <div className="text-center text-gray-500 text-sm">
-                  <div className="text-2xl mb-2">📈</div>
-                  <p>Activité récente bientôt disponible</p>
-                  <p className="text-xs text-gray-400 mt-1">
-                    {dataLoaded ? 'Données chargées' : 'Chargement en cours...'}
-                  </p>
+              {/* Performance du jour */}
+              <div className="pt-4 border-t border-gray-200">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600">Performance du jour</span>
+                  <span className={`font-medium ${
+                    ((stats?.dailyStats?.profileViews || 0) + (stats?.dailyStats?.likesReceived || 0)) > 5
+                      ? 'text-green-600' : 'text-yellow-600'
+                  }`}>
+                    {((stats?.dailyStats?.profileViews || 0) + (stats?.dailyStats?.likesReceived || 0)) > 5
+                      ? '🔥 Excellente' : '📈 Moyenne'}
+                  </span>
                 </div>
               </div>
             </Card>

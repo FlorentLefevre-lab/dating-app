@@ -3,6 +3,22 @@ import { auth } from '@/lib/auth'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { withRateLimit } from '@/lib/middleware/rateLimit'
+import { cache } from '@/lib/cache'
+
+/**
+ * Invalide le cache des stats pour un ou plusieurs utilisateurs
+ * Utilise le préfixe 'api:' + 'stats:userId' pour correspondre à apiCache.stats
+ */
+async function invalidateStatsCache(...userIds: string[]): Promise<void> {
+  try {
+    await Promise.all(
+      userIds.map(userId => cache.delete(`stats:${userId}`, { prefix: 'api:' }))
+    )
+    console.log(`🗑️ Cache stats invalidé pour: ${userIds.join(', ')}`)
+  } catch (error) {
+    console.error('⚠️ Erreur invalidation cache stats:', error)
+  }
+}
 
 // Rate limited: 30 requests/minute for likes
 async function handlePostLikes(request: NextRequest) {
@@ -89,7 +105,7 @@ async function handlePostLikes(request: NextRequest) {
     }
 
     // Marquer le profil comme vu
-    await prisma.profileView.upsert({
+    const profileViewResult = await prisma.profileView.upsert({
       where: {
         viewerId_viewedId: { viewerId: fromUserId, viewedId: toUserId }
       },
@@ -100,19 +116,28 @@ async function handlePostLikes(request: NextRequest) {
       }
     });
 
+    // Invalider le cache si une nouvelle vue a été créée
+    if (profileViewResult.createdAt.getTime() === profileViewResult.createdAt.getTime()) {
+      // ProfileView créé ou mis à jour - invalider le cache du profil vu
+      await invalidateStatsCache(toUserId);
+    }
+
     let isMatch = false;
     let matchId = null;
 
     if (action === 'like') {
       // Créer le like
       await prisma.like.create({
-        data: { 
-          senderId: fromUserId, 
-          receiverId: toUserId 
+        data: {
+          senderId: fromUserId,
+          receiverId: toUserId
         }
       });
 
       console.log('👍 Like enregistré');
+
+      // Invalider le cache stats du receveur (il a reçu un like)
+      await invalidateStatsCache(toUserId);
 
       // Vérifier si c'est un match mutuel
       const mutualLike = await prisma.like.findUnique({
@@ -160,17 +185,23 @@ async function handlePostLikes(request: NextRequest) {
         matchId = match.id;
         console.log('🎉 MATCH créé !', matchId);
         console.log('💕 Entre:', currentUser.name, 'et', targetUser.name);
+
+        // Invalider le cache stats des deux utilisateurs (nouveau match)
+        await invalidateStatsCache(fromUserId, toUserId);
       }
 
     } else if (action === 'dislike') {
       // Créer le dislike
       await prisma.dislike.create({
-        data: { 
-          senderId: fromUserId, 
-          receiverId: toUserId 
+        data: {
+          senderId: fromUserId,
+          receiverId: toUserId
         }
       });
       console.log('👎 Dislike enregistré');
+
+      // Note: pas d'invalidation de cache pour les dislikes
+      // car ils n'affectent pas les stats affichées
     }
 
     return NextResponse.json({

@@ -20,6 +20,7 @@ export interface QueryReturn<T> {
   isRefreshing: boolean;
   error: string | null;
   refetch: () => Promise<void>;
+  lastUpdated: Date | null;
 }
 
 // Cache simple en mémoire
@@ -76,15 +77,51 @@ export function useQuery<T>(
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const mountedRef = useRef(true);
 
+  // 🔧 Mount/Unmount tracking - MUST be FIRST effect for React StrictMode
+  useEffect(() => {
+    mountedRef.current = true;
+    console.log(`🔧 [useQuery] Component mounted for ${url}`);
+
+    return () => {
+      console.log(`🔧 [useQuery] Component unmounting for ${url}`);
+      mountedRef.current = false;
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+      }
+    };
+  }, [url]);
+
   const fetchData = useCallback(async (isRefresh = false) => {
+    console.log(`🔄 [useQuery] fetchData called for ${url}`, { enabled, requireAuth, status, isRefresh, mounted: mountedRef.current });
+
     // Vérifications préliminaires
-    if (!enabled) return;
-    if (requireAuth && status !== 'authenticated') return;
-    if (!mountedRef.current) return;
+    if (!enabled) {
+      console.log(`⏸️ [useQuery] Skipped - not enabled`);
+      setIsLoading(false);
+      return;
+    }
+    if (!url) {
+      console.log(`⏸️ [useQuery] Skipped - no URL`);
+      setIsLoading(false);
+      return;
+    }
+    if (requireAuth && status === 'loading') {
+      console.log(`⏳ [useQuery] Waiting for auth...`);
+      return;
+    }
+    if (requireAuth && status !== 'authenticated') {
+      console.log(`🚫 [useQuery] Not authenticated`);
+      setIsLoading(false);
+      setError('Non authentifié');
+      return;
+    }
+    // Note: mountedRef check removed from here - only checked after async operations
+    console.log(`✓ [useQuery] All checks passed, proceeding to fetch`);
 
     try {
       if (isRefresh) {
@@ -98,19 +135,26 @@ export function useQuery<T>(
       if (useCache && !isRefresh) {
         const cachedData = cache.get(url);
         if (cachedData) {
+          console.log(`📦 [useQuery] Cache HIT for ${url}`);
           setData(cachedData);
+          setLastUpdated(new Date());
           setIsLoading(false);
           return;
         }
+        console.log(`📦 [useQuery] Cache MISS for ${url}`);
       }
 
-      // Effectuer la requête
+      // Effectuer la requête (avec credentials pour l'authentification)
+      console.log(`🌐 [useQuery] Fetching ${url}...`);
       const response = await fetch(url, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json'
-        }
+        },
+        credentials: 'include'
       });
+
+      console.log(`📡 [useQuery] Response status: ${response.status}`);
 
       if (!response.ok) {
         throw new Error(`Erreur ${response.status}: ${response.statusText}`);
@@ -125,17 +169,18 @@ export function useQuery<T>(
         cache.set(url, responseData, cacheTtl);
       }
 
+      console.log(`✅ [useQuery] Data received for ${url}:`, responseData);
       setData(responseData);
+      setLastUpdated(new Date());
       setError(null);
 
     } catch (err) {
+      console.error(`❌ [useQuery] Error for ${url}:`, err);
       if (!mountedRef.current) return;
-      
+
       const errorMessage = err instanceof Error ? err.message : 'Erreur inconnue';
       setError(errorMessage);
-      
-      console.error(`❌ [useQuery] Erreur pour ${url}:`, err);
-      
+
       // Retry si activé
       if (retryOnError && !isRefresh) {
         setTimeout(() => {
@@ -176,22 +221,13 @@ export function useQuery<T>(
     }
   }, [polling, enabled, status, fetchData]);
 
-  // Cleanup
-  useEffect(() => {
-    return () => {
-      mountedRef.current = false;
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current);
-      }
-    };
-  }, []);
-
   return {
     data,
     isLoading,
     isRefreshing,
     error,
-    refetch
+    refetch,
+    lastUpdated
   };
 }
 

@@ -6,6 +6,22 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { Match, MatchStats, MatchesResponse } from '@/types/matches';
+import { cache } from '@/lib/cache';
+
+/**
+ * Invalide le cache des stats pour un ou plusieurs utilisateurs
+ * Utilise le préfixe 'api:' + 'stats:userId' pour correspondre à apiCache.stats
+ */
+async function invalidateStatsCache(...userIds: string[]): Promise<void> {
+  try {
+    await Promise.all(
+      userIds.map(userId => cache.delete(`stats:${userId}`, { prefix: 'api:' }))
+    );
+    console.log(`🗑️ [MATCHES] Cache stats invalidé pour: ${userIds.join(', ')}`);
+  } catch (error) {
+    console.error('⚠️ [MATCHES] Erreur invalidation cache stats:', error);
+  }
+}
 
 // Mapping français -> enum pour comparaison
 const genderToEnum: Record<string, string> = {
@@ -364,6 +380,9 @@ export async function POST(request: NextRequest) {
         }
       });
 
+      // Invalider le cache stats du receveur (il a reçu un like)
+      await invalidateStatsCache(targetUserId);
+
       // Vérifier si c'est un match (like bidirectionnel)
       const reverseLike = await prisma.like.findFirst({
         where: {
@@ -386,6 +405,9 @@ export async function POST(request: NextRequest) {
           }
         });
         matchId = match.id;
+
+        // Invalider le cache stats des deux utilisateurs (nouveau match)
+        await invalidateStatsCache(session.user.id, targetUserId);
       }
 
       console.log(`✅ [MATCHES] ${isMatch ? 'MATCH' : 'Like'} créé avec ${targetUser.name}`);
@@ -497,6 +519,9 @@ export async function DELETE(request: NextRequest) {
           ]
         }
       });
+
+      // Invalider le cache stats des deux utilisateurs (match supprimé)
+      await invalidateStatsCache(currentUserId, otherUserId);
 
       console.log(`✅ [MATCHES] Match supprimé entre ${currentUserId} et ${otherUserId}`);
 

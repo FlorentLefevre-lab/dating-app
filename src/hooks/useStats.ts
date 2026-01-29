@@ -3,25 +3,36 @@
 // ===============================
 
 import { useQuery, type QueryReturn } from '@/hooks/useQuery';
+import { useSession } from 'next-auth/react';
 
 // Types pour vos stats (SANS messages)
-interface StatsData {
+export interface StatsData {
   profileViews: number;
   likesReceived: number;
   matchesCount: number;
-  
+
   dailyStats?: {
     profileViews: number;
     likesReceived: number;
     matchesCount: number;
   };
-  
+
   totalStats?: {
     profileViews: number;
     likesReceived: number;
     matchesCount: number;
   };
-  
+
+  // Stats de matches détaillées (temps réel)
+  matchStats?: {
+    totalMatches: number;
+    newMatches: number;
+    activeConversations: number;
+    dormantMatches: number;
+    averageResponseTime: string;
+    thisWeekMatches: number;
+  };
+
   meta?: {
     timestamp: string;
     userId: string;
@@ -35,14 +46,23 @@ interface StatsData {
 
 // 🔥 Hook principal ULTRA-OPTIMISÉ pour éviter les appels répétés
 export function useStats(realTime = false): QueryReturn<StatsData> {
-  return useQuery<StatsData>('/api/user/stats', {
-    cache: true,
-    cacheTtl: 5 * 60 * 1000, // 🔥 5 MINUTES côté client (plus long)
-    polling: realTime ? 2 * 60 * 1000 : 0, // 🔥 2 minutes de polling (très peu fréquent)
-    retryOnError: false, // 🔥 PAS de retry automatique
-    requireAuth: true,
-    enabled: true
-  });
+  const { data: session, status } = useSession();
+  const userId = session?.user?.id;
+
+  console.log('🔍 [useStats] Session status:', status, 'userId:', userId);
+
+  // Utilise l'endpoint avec userId pour avoir les matchStats
+  return useQuery<StatsData>(
+    userId ? `/api/users/${userId}/stats` : '',
+    {
+      cache: true,
+      cacheTtl: 5 * 60 * 1000, // 🔥 5 MINUTES côté client
+      polling: realTime ? 2 * 60 * 1000 : 0,
+      retryOnError: false,
+      requireAuth: true,
+      enabled: status === 'authenticated' && !!userId
+    }
+  );
 }
 
 // Hook avec options avancées

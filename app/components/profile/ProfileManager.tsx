@@ -76,6 +76,14 @@ const ProfileManager: React.FC = () => {
     lastUpdated: statsLastUpdated
   } = useStats(false);
 
+  // 🔥 DEBUG: Afficher les stats du hook
+  console.log('📊 [ProfileManager] useStats:', {
+    statsData,
+    statsLoading,
+    statsError,
+    statsLastUpdated
+  });
+
   // Configuration des onglets (ordre: Aperçu, Photos, Préférences, Stats, Infos de base, Infos détaillées, Physique, Style de vie)
   const tabs = [
     {
