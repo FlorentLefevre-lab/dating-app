@@ -99,12 +99,14 @@ enum AdminActionType {
   USER_BANNED
   USER_UNBANNED
   USER_DELETED
+  USER_WARNED
   PHOTO_APPROVED
   PHOTO_REJECTED
   REPORT_RESOLVED
   REPORT_DISMISSED
   ROLE_CHANGED
   SETTINGS_UPDATED
+  CONTENT_REMOVED
 }
 
 // ================================
@@ -183,6 +185,7 @@ model User {
   photos               Photo[]
   preferences          UserPreferences?
   notificationSettings NotificationSettings?
+  notifications        Notification[]
 
   // Relations de likes/matches  
   likesGiven    Like[] @relation("UserLikesGiven")
@@ -214,6 +217,12 @@ model User {
   reportsResolved   Report[]   @relation("ReportResolver")
   adminActions      AdminLog[] @relation("AdminActor")
   actionsReceived   AdminLog[] @relation("AdminActionTarget")
+
+  // Relations Tickets
+  tickets           Ticket[]        @relation("UserTickets")
+  assignedTickets   Ticket[]        @relation("AssignedTickets")
+  resolvedTickets   Ticket[]        @relation("ResolvedTickets")
+  ticketMessages    TicketMessage[] @relation("TicketMessages")
 
   @@map("users")
 }
@@ -313,6 +322,33 @@ model NotificationSettings {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("notification_settings")
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  message   String
+  read      Boolean          @default(false)
+  data      Json?
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([read])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+enum NotificationType {
+  SYSTEM
+  MATCH
+  MESSAGE
+  LIKE
+  WARNING
+  SUSPENSION
 }
 
 model Like {
@@ -535,4 +571,192 @@ model GlobalStats {
   lastCalculated DateTime @default(now())
 
   @@map("global_stats")
+}
+
+// ================================
+// MODÈLES ADMIN - PARAMÈTRES APPLICATION
+// ================================
+
+model AppSettings {
+  id String @id @default("singleton")
+
+  // === MODÉRATION ===
+  // Seuil de score NSFW pour auto-flag (0.0 à 1.0)
+  nsfwThreshold Float @default(0.7)
+  // Nombre de signalements avant auto-suspension
+  reportsBeforeAutoSuspend Int @default(5)
+  // Durées de suspension par défaut (en jours, -1 = permanent)
+  suspensionDurations Int[] @default([1, 7, 30, -1])
+  // Auto-approuver les photos (désactive la modération manuelle)
+  autoApprovePhotos Boolean @default(false)
+
+  // === LIMITES UTILISATEURS ===
+  // Likes par jour (gratuit)
+  dailyLikesLimit Int @default(50)
+  // Likes par jour (premium)
+  dailyLikesLimitPremium Int @default(999)
+  // Super likes par jour (gratuit)
+  dailySuperLikesLimit Int @default(1)
+  // Super likes par jour (premium)
+  dailySuperLikesLimitPremium Int @default(5)
+  // Nombre max de photos par profil
+  maxPhotosPerUser Int @default(6)
+  // Messages par jour pour nouveaux comptes (< 7 jours)
+  dailyMessagesLimitNewUsers Int @default(20)
+  // Rewinds par jour (gratuit)
+  dailyRewindsLimit Int @default(0)
+  // Rewinds par jour (premium)
+  dailyRewindsLimitPremium Int @default(5)
+
+  // === INSCRIPTION ===
+  // Âge minimum
+  minAge Int @default(18)
+  // Âge maximum
+  maxAge Int @default(99)
+  // Vérification email obligatoire
+  emailVerificationRequired Boolean @default(true)
+  // Inscriptions ouvertes
+  registrationOpen Boolean @default(true)
+  // Régions autorisées (vide = toutes)
+  allowedRegions String[] @default([])
+
+  // === MATCHING ===
+  // Distance max par défaut (km)
+  defaultMaxDistance Int @default(100)
+  // Distance max autorisée (km)
+  maxDistanceLimit Int @default(500)
+  // Écart d'âge par défaut
+  defaultAgeRange Int @default(10)
+
+  // === FEATURE FLAGS ===
+  // Mode maintenance
+  maintenanceMode Boolean @default(false)
+  // Message de maintenance
+  maintenanceMessage String @default("L'application est en maintenance. Veuillez réessayer plus tard.")
+  // Fonctionnalité premium active
+  premiumEnabled Boolean @default(true)
+  // Vidéo-chat actif
+  videoChatEnabled Boolean @default(false)
+  // Stories actives
+  storiesEnabled Boolean @default(false)
+  // Boost de profil actif
+  boostEnabled Boolean @default(true)
+
+  // === MESSAGES SYSTÈME ===
+  // Annonce globale (vide = pas d'annonce)
+  globalAnnouncement String @default("")
+  // Type d'annonce (info, warning, success, error)
+  announcementType String @default("info")
+  // Message de bienvenue
+  welcomeMessage String @default("Bienvenue sur FlowDating ! Complétez votre profil pour commencer.")
+  // Conditions d'utilisation (URL)
+  termsUrl String @default("/terms")
+  // Politique de confidentialité (URL)
+  privacyUrl String @default("/privacy")
+
+  // === SÉCURITÉ ===
+  // Tentatives de connexion max avant blocage
+  maxLoginAttempts Int @default(5)
+  // Durée de blocage après échecs (minutes)
+  loginBlockDuration Int @default(15)
+  // Session expiration (heures)
+  sessionExpirationHours Int @default(168)
+  // Forcer HTTPS
+  forceHttps Boolean @default(true)
+
+  // === MÉTADONNÉES ===
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+
+  @@map("app_settings")
+}
+
+// ================================
+// MODÈLES TICKETS / SUPPORT
+// ================================
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_USER
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum TicketCategory {
+  BUG
+  FEATURE_REQUEST
+  ACCOUNT_ISSUE
+  PAYMENT
+  HARASSMENT
+  TECHNICAL
+  OTHER
+}
+
+model Ticket {
+  id          String         @id @default(cuid())
+  userId      String
+
+  // Contenu du ticket
+  subject     String
+  description String
+  category    TicketCategory
+  priority    TicketPriority @default(MEDIUM)
+  status      TicketStatus   @default(OPEN)
+
+  // Informations techniques (auto-collectées)
+  userAgent   String?
+  appVersion  String?
+  screenSize  String?
+  currentUrl  String?
+
+  // Pièces jointes (URLs des screenshots)
+  attachments String[]
+
+  // Gestion admin
+  assignedTo  String?
+  resolvedAt  DateTime?
+  resolvedBy  String?
+  resolution  String?
+
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  user        User     @relation("UserTickets", fields: [userId], references: [id], onDelete: Cascade)
+  assignee    User?    @relation("AssignedTickets", fields: [assignedTo], references: [id])
+  resolver    User?    @relation("ResolvedTickets", fields: [resolvedBy], references: [id])
+  messages    TicketMessage[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([priority])
+  @@index([category])
+  @@index([assignedTo])
+  @@index([createdAt])
+  @@map("tickets")
+}
+
+model TicketMessage {
+  id        String   @id @default(cuid())
+  ticketId  String
+  userId    String
+  message   String
+  isAdmin   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user      User     @relation("TicketMessages", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+  @@index([createdAt])
+  @@map("ticket_messages")
 }

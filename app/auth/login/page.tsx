@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useState } from 'react'
+import { Suspense, useState, useEffect } from 'react'
 import { signIn } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
@@ -14,6 +14,14 @@ function LoginContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const callbackUrl = searchParams.get('callbackUrl') || '/home'
+  const urlError = searchParams.get('error')
+
+  // Afficher le message si redirigé après suspension
+  useEffect(() => {
+    if (urlError === 'account_suspended') {
+      setError('Votre compte a ete suspendu. Veuillez reessayer apres la fin de votre periode de suspension.')
+    }
+  }, [urlError])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -28,7 +36,16 @@ function LoginContent() {
       })
 
       if (result?.error) {
-        setError('Email ou mot de passe incorrect')
+        // Parse specific error messages from auth
+        if (result.error.includes('BANNED:')) {
+          setError(result.error.replace('BANNED:', ''))
+        } else if (result.error.includes('SUSPENDED:')) {
+          setError(result.error.replace('SUSPENDED:', ''))
+        } else if (result.error.includes('bloque')) {
+          setError('Compte temporairement bloque suite a plusieurs tentatives echouees. Reessayez dans 15 minutes.')
+        } else {
+          setError('Email ou mot de passe incorrect')
+        }
       } else if (result?.ok) {
         router.push(callbackUrl)
         router.refresh()

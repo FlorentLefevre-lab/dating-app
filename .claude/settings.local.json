@@ -18,7 +18,12 @@
       "Bash(node scripts/check-status.js:*)",
       "WebFetch(domain:www.prisma.io)",
       "Bash(del \"\\\\?\\\\C:\\\\developement\\\\FlowDating\\\\dating-app\\\\nul\")",
-      "Bash(npx tsx:*)"
+      "Bash(npx tsx:*)",
+      "Bash(npx prisma:*)",
+      "Bash(tasklist:*)",
+      "Bash(npx next lint:*)",
+      "Bash(yarn add:*)",
+      "Bash(npm run db:seed:100:*)"
     ]
   }
 }

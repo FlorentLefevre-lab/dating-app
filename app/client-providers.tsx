@@ -5,6 +5,8 @@ import { ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import Navbar from '@/components/layout/Navbar';
 import { PresenceProvider } from '@/providers/PresenceProvider';
+import { AccountStatusChecker } from './components/AccountStatusChecker';
+import { MaintenanceGuard, GlobalAnnouncement } from './components/MaintenanceGuard';
 
 interface ClientProvidersProps {
   children: ReactNode;
@@ -47,7 +49,11 @@ function AuthenticatedLayout({ children }: { children: ReactNode }) {
 export default function ClientProviders({ children }: ClientProvidersProps) {
   return (
     <SessionProvider>
-      <AuthenticatedLayout>{children}</AuthenticatedLayout>
+      <MaintenanceGuard>
+        <AccountStatusChecker />
+        <GlobalAnnouncement />
+        <AuthenticatedLayout>{children}</AuthenticatedLayout>
+      </MaintenanceGuard>
     </SessionProvider>
   );
 }

@@ -68,6 +68,18 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
   const isAccountSuspended = accountStatus === 'SUSPENDED' || accountStatus === 'BANNED';
   const isAccountActive = accountStatus === 'ACTIVE';
+
+  // Déterminer si c'est une suspension admin (modération) vs utilisateur
+  const userSuspendReasons = ['break', 'privacy', 'found_match', 'too_busy', 'rethinking', 'other'];
+  const isAdminSuspension = profile?.suspensionReason &&
+    !userSuspendReasons.includes(profile.suspensionReason) &&
+    (profile.suspensionReason.includes('Signalement') ||
+     profile.suspensionReason.includes('Report') ||
+     profile.suspensionReason.includes('Banni'));
+
+  // Vérifier si la suspension a une date de fin (suspension temporaire admin)
+  const suspendedUntil = profile?.suspendedUntil ? new Date(profile.suspendedUntil) : null;
+  const canReactivate = isAccountSuspended && !isAdminSuspension && accountStatus !== 'BANNED';
   
   const { reactivateAccount, isLoading: hookIsLoading } = useAccountActions();
   // Réinitialisation de l'état de suspension
@@ -310,33 +322,47 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
       {/* Bannière d'alerte si compte suspendu ou banni */}
       {isAccountSuspended && (
         <div className={`border-l-4 p-3 rounded-r-lg mb-4 ${
-          profile?.accountStatus === 'BANNED' 
-            ? 'bg-red-100 border-red-500' 
-            : 'bg-orange-100 border-orange-500'
+          profile?.accountStatus === 'BANNED'
+            ? 'bg-red-100 border-red-500'
+            : isAdminSuspension
+              ? 'bg-red-50 border-red-400'
+              : 'bg-orange-100 border-orange-500'
         }`}>
           <div className="flex items-center">
             <div className="flex-shrink-0">
               <ExclamationTriangleIcon className={`h-5 w-5 ${
-                profile?.accountStatus === 'BANNED' ? 'text-red-500' : 'text-orange-500'
+                profile?.accountStatus === 'BANNED' ? 'text-red-500' : isAdminSuspension ? 'text-red-400' : 'text-orange-500'
               }`} />
             </div>
             <div className="ml-3">
               <p className={`text-sm ${
-                profile?.accountStatus === 'BANNED' ? 'text-red-700' : 'text-orange-700'
+                profile?.accountStatus === 'BANNED' ? 'text-red-700' : isAdminSuspension ? 'text-red-600' : 'text-orange-700'
               }`}>
                 <strong>
-                  {profile?.accountStatus === 'BANNED' 
-                    ? 'Votre compte est banni.' 
-                    : 'Votre compte est suspendu.'
+                  {profile?.accountStatus === 'BANNED'
+                    ? 'Votre compte est banni.'
+                    : isAdminSuspension
+                      ? 'Votre compte a été suspendu par la modération.'
+                      : 'Votre compte est suspendu.'
                   }
-                </strong> 
+                </strong>
+                {' '}
                 {profile?.accountStatus === 'BANNED'
-                  ? ' Votre accès à la plateforme a été restreint. Contactez le support pour plus d\'informations.'
-                  : ' Votre profil n\'est pas visible et vous ne recevez plus de notifications. Vous pouvez le réactiver ci-dessous dans la zone de danger.'
+                  ? 'Votre accès à la plateforme a été définitivement restreint pour violation des règles.'
+                  : isAdminSuspension
+                    ? suspendedUntil
+                      ? `Votre compte sera automatiquement réactivé le ${suspendedUntil.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}.`
+                      : 'Contactez le support pour plus d\'informations.'
+                    : 'Votre profil n\'est pas visible et vous ne recevez plus de notifications. Vous pouvez le réactiver ci-dessous dans la zone de danger.'
                 }
               </p>
+              {isAdminSuspension && profile?.suspensionReason && (
+                <p className="text-xs mt-1 text-red-500">
+                  Raison: {profile.suspensionReason}
+                </p>
+              )}
               <p className={`text-xs mt-1 ${
-                profile?.accountStatus === 'BANNED' ? 'text-red-600' : 'text-orange-600'
+                profile?.accountStatus === 'BANNED' ? 'text-red-600' : isAdminSuspension ? 'text-red-500' : 'text-orange-600'
               }`}>
                 Statut actuel: {profile?.accountStatus || 'Non défini'}
               </p>
@@ -474,6 +500,26 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
               {/* Bouton Suspension/Réactivation */}
               {(() => {
                 if (accountStatus === 'SUSPENDED') {
+                  // Suspension admin avec date de fin
+                  if (isAdminSuspension && suspendedUntil) {
+                    return (
+                      <div className="flex flex-col items-center justify-center px-3 py-2 text-xs bg-red-100 text-red-700 rounded-lg border border-red-300">
+                        <LockClosedIcon className="w-4 h-4 mb-1" />
+                        <span className="font-medium">Suspendu</span>
+                        <span className="text-[10px]">jusqu'au {suspendedUntil.toLocaleDateString('fr-FR')}</span>
+                      </div>
+                    );
+                  }
+                  // Suspension admin sans date (indéfinie)
+                  if (isAdminSuspension && !suspendedUntil) {
+                    return (
+                      <div className="flex items-center justify-center px-3 py-2 text-sm bg-red-100 text-red-700 rounded-lg border border-red-300 cursor-not-allowed">
+                        <LockClosedIcon className="w-4 h-4 mr-1" />
+                        Suspendu
+                      </div>
+                    );
+                  }
+                  // Suspension utilisateur (peut réactiver)
                   return (
                     <button
                       onClick={() => setShowReactivateModal(true)}

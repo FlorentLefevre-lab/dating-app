@@ -96,19 +96,19 @@ export async function GET() {
 
       // User growth last 30 days (grouped by day)
       prisma.$queryRaw<Array<{ date: string; count: bigint }>>`
-        SELECT DATE(created_at) as date, COUNT(*) as count
+        SELECT DATE("createdAt") as date, COUNT(*) as count
         FROM users
-        WHERE created_at >= ${monthAgo}
-        GROUP BY DATE(created_at)
+        WHERE "createdAt" >= ${monthAgo}
+        GROUP BY DATE("createdAt")
         ORDER BY date ASC
       `,
 
       // Matches growth last 30 days
       prisma.$queryRaw<Array<{ date: string; count: bigint }>>`
-        SELECT DATE(created_at) as date, COUNT(*) as count
+        SELECT DATE("createdAt") as date, COUNT(*) as count
         FROM matches
-        WHERE created_at >= ${monthAgo}
-        GROUP BY DATE(created_at)
+        WHERE "createdAt" >= ${monthAgo}
+        GROUP BY DATE("createdAt")
         ORDER BY date ASC
       `
     ])

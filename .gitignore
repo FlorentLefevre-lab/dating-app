@@ -71,7 +71,6 @@ yarn-error.log*
 .env.development.local
 .env.test.local
 .env.production.local
-<<<<<<< HEAD
 
 # Vercel
 .vercel
@@ -111,7 +110,6 @@ coverage/
 
 # Stylelint cache
 .stylelintcache
-=======
 .env.staging
 .env.docker
 .env.backup
@@ -345,4 +343,4 @@ ehthumbs.db
 # - Clés API (Cloudinary, Stream.io)
 # - Données utilisateurs réelles
 # - Backups de production
->>>>>>> 25ab2c001a6ea94fb8c2f59022ee5f7c1b3a9c34
+nul

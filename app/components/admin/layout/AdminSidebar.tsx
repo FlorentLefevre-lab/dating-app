@@ -15,6 +15,7 @@ import {
   Shield,
   Activity,
   FileText,
+  Ticket,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -47,6 +48,11 @@ const navItems: NavItem[] = [
     title: "Signalements",
     href: "/admin/reports",
     icon: Flag,
+  },
+  {
+    title: "Tickets",
+    href: "/admin/tickets",
+    icon: Ticket,
   },
   {
     title: "Activite",

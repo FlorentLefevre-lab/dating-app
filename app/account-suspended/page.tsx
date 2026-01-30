@@ -40,14 +40,25 @@ export default function AccountSuspendedPage() {
       const response = await fetch('/api/user/status');
       if (response.ok) {
         const data = await response.json();
-        setAccountInfo(data);
+        // L'API retourne les données dans data.user
+        const userInfo = data.user || data;
+        setAccountInfo(userInfo);
         
         // Vérifier si l'utilisateur peut réactiver son compte
-        if (data.suspendedUntil) {
+        // Les comptes bannis ou suspendus par admin ne peuvent pas se réactiver
+        const isUserSuspension = !data.suspensionReason ||
+          ['break', 'privacy', 'found_match', 'too_busy', 'rethinking', 'other'].includes(data.suspensionReason);
+
+        if (data.accountStatus === 'BANNED') {
+          setCanReactivate(false);
+        } else if (!isUserSuspension) {
+          // Suspension admin - ne peut pas réactiver manuellement
+          setCanReactivate(false);
+        } else if (data.suspendedUntil) {
           const canReactivateNow = new Date() >= new Date(data.suspendedUntil);
           setCanReactivate(canReactivateNow);
         } else {
-          // Suspension indéfinie - peut être réactivée manuellement
+          // Suspension utilisateur indéfinie - peut être réactivée manuellement
           setCanReactivate(true);
         }
       }
@@ -80,6 +91,9 @@ export default function AccountSuspendedPage() {
     });
   };
 
+  // Raisons de suspension utilisateur (volontaire)
+  const userSuspendReasons = ['break', 'privacy', 'found_match', 'too_busy', 'rethinking', 'other'];
+
   const getSuspensionReasonLabel = (reason?: string) => {
     const reasons: Record<string, string> = {
       'break': 'Pause temporaire',
@@ -89,8 +103,14 @@ export default function AccountSuspendedPage() {
       'rethinking': 'Je repense à mes objectifs',
       'other': 'Autre raison'
     };
-    return reasons[reason || ''] || 'Non spécifiée';
+    return reasons[reason || ''] || reason || 'Non spécifiée';
   };
+
+  // Vérifier si c'est une suspension admin (modération)
+  const isAdminSuspension = accountInfo?.suspensionReason &&
+    !userSuspendReasons.includes(accountInfo.suspensionReason);
+
+  const isBanned = accountInfo?.accountStatus === 'BANNED';
 
   // Affichage de chargement pendant la vérification de session
   if (session === undefined) {
@@ -118,14 +138,23 @@ export default function AccountSuspendedPage() {
       >
         <Card className="max-w-md w-full p-8">
           <div className="text-center mb-6">
-            <div className="w-16 h-16 bg-orange-100 rounded-full flex-center mx-auto mb-4">
-              <ExclamationTriangleIcon className="w-8 h-8 text-orange-600" />
+            <div className={`w-16 h-16 rounded-full flex-center mx-auto mb-4 ${
+              isBanned ? 'bg-red-100' : isAdminSuspension ? 'bg-red-50' : 'bg-orange-100'
+            }`}>
+              <ExclamationTriangleIcon className={`w-8 h-8 ${
+                isBanned ? 'text-red-600' : isAdminSuspension ? 'text-red-500' : 'text-orange-600'
+              }`} />
             </div>
             <h1 className="text-heading mb-2">
-              Compte suspendu
+              {isBanned ? 'Compte banni' : isAdminSuspension ? 'Compte suspendu par la modération' : 'Compte suspendu'}
             </h1>
             <p className="text-body">
-              Votre compte a été temporairement désactivé
+              {isBanned
+                ? 'Votre compte a été définitivement banni pour violation des règles'
+                : isAdminSuspension
+                  ? 'Votre compte a été suspendu suite à un signalement'
+                  : 'Votre compte a été temporairement désactivé'
+              }
             </p>
           </div>
 
@@ -198,6 +227,36 @@ export default function AccountSuspendedPage() {
                 </>
               )}
             </Button>
+          ) : isBanned ? (
+            <Card className="bg-red-50 border-red-300 p-4 text-center">
+              <ExclamationTriangleIcon className="w-6 h-6 text-red-600 mx-auto mb-2" />
+              <p className="text-red-800 text-sm font-medium">
+                Votre compte a été définitivement banni.
+              </p>
+              <p className="text-red-600 text-xs mt-1">
+                Contactez le support si vous pensez qu&apos;il s&apos;agit d&apos;une erreur.
+              </p>
+            </Card>
+          ) : isAdminSuspension ? (
+            <Card className="bg-red-50 border-red-200 p-4 text-center">
+              <ClockIcon className="w-6 h-6 text-red-500 mx-auto mb-2" />
+              {accountInfo?.suspendedUntil ? (
+                <>
+                  <p className="text-red-700 text-sm font-medium">
+                    Suspension temporaire
+                  </p>
+                  <p className="text-red-600 text-sm mt-1">
+                    Votre compte sera automatiquement réactivé le{' '}
+                    {formatDate(accountInfo.suspendedUntil)}
+                  </p>
+                </>
+              ) : (
+                <p className="text-red-700 text-sm">
+                  Votre compte est suspendu par la modération.
+                  Contactez le support pour plus d&apos;informations.
+                </p>
+              )}
+            </Card>
           ) : (
             <Card className="bg-yellow-50 border-yellow-200 p-4 text-center">
               <ClockIcon className="w-6 h-6 text-yellow-600 mx-auto mb-2" />

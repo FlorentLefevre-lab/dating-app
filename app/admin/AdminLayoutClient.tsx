@@ -3,6 +3,7 @@
 import * as React from "react";
 import { AdminSidebar, AdminHeader, AdminBreadcrumb } from "@/components/admin/layout";
 import { cn } from "@/lib/utils";
+import { Toaster } from "@/components/ui/toaster";
 
 interface AdminLayoutClientProps {
   children: React.ReactNode;
@@ -62,6 +63,9 @@ export function AdminLayoutClient({
           {children}
         </main>
       </div>
+
+      {/* Toast notifications */}
+      <Toaster />
     </div>
   );
 }

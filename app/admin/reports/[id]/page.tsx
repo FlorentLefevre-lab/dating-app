@@ -16,13 +16,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useToast } from "@/components/ui/use-toast";
 import {
   ArrowLeft,
@@ -118,7 +111,7 @@ export default function ReportDetailPage() {
   // Dialog state
   const [resolveDialogOpen, setResolveDialogOpen] = React.useState(false);
   const [resolution, setResolution] = React.useState("");
-  const [userAction, setUserAction] = React.useState<string>("");
+  const [selectedActions, setSelectedActions] = React.useState<string[]>([]);
   const [actionType, setActionType] = React.useState<"resolve" | "dismiss">("resolve");
 
   // Fetch report
@@ -157,7 +150,8 @@ export default function ReportDetailPage() {
         body: JSON.stringify({
           status: actionType === "resolve" ? "RESOLVED" : "DISMISSED",
           resolution,
-          userAction: actionType === "resolve" ? userAction || undefined : undefined,
+          actions: actionType === "resolve" ? selectedActions :
+                   actionType === "dismiss" && selectedActions.includes("warn_reporter") ? ["warn_reporter"] : [],
         }),
       });
 
@@ -166,9 +160,11 @@ export default function ReportDetailPage() {
         throw new Error(err.error || "Erreur");
       }
 
+      const result = await response.json();
+
       toast({
         title: "Succes",
-        description: `Signalement ${actionType === "resolve" ? "resolu" : "rejete"}`,
+        description: `Signalement ${actionType === "resolve" ? "resolu" : "rejete"}${result.actions?.length ? ` avec ${result.actions.length} action(s)` : ""}`,
       });
 
       setResolveDialogOpen(false);
@@ -187,8 +183,27 @@ export default function ReportDetailPage() {
   const openResolveDialog = (type: "resolve" | "dismiss") => {
     setActionType(type);
     setResolution("");
-    setUserAction("");
+    setSelectedActions([]);
     setResolveDialogOpen(true);
+  };
+
+  const toggleAction = (action: string) => {
+    setSelectedActions(prev => {
+      // Si c'est une action de suspension/ban, désélectionner les autres du même type
+      const suspendActions = ["suspend_1d", "suspend_3d", "suspend_7d", "suspend_30d", "ban"];
+      if (suspendActions.includes(action)) {
+        const filtered = prev.filter(a => !suspendActions.includes(a));
+        if (prev.includes(action)) {
+          return filtered;
+        }
+        return [...filtered, action];
+      }
+      // Toggle normal
+      if (prev.includes(action)) {
+        return prev.filter(a => a !== action);
+      }
+      return [...prev, action];
+    });
   };
 
   if (loading) {
@@ -320,7 +335,40 @@ export default function ReportDetailPage() {
             {report.description && (
               <div>
                 <p className="text-sm font-medium">Description</p>
-                <p className="text-sm text-muted-foreground">{report.description}</p>
+                <p className="text-sm text-muted-foreground whitespace-pre-line">{report.description}</p>
+              </div>
+            )}
+
+            {/* Evidence URLs - Photos signalées du chat */}
+            {report.evidenceUrls && report.evidenceUrls.length > 0 && (
+              <div className="border-t pt-4">
+                <p className="mb-2 text-sm font-medium text-red-600">
+                  Photos/Fichiers signales ({report.evidenceUrls.length})
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {report.evidenceUrls.map((url, index) => (
+                    <div
+                      key={index}
+                      className="relative aspect-square overflow-hidden rounded-md bg-muted border-2 border-red-200"
+                    >
+                      <Image
+                        src={url}
+                        alt={`Preuve ${index + 1}`}
+                        fill
+                        className="object-cover"
+                        unoptimized
+                      />
+                      <a
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="absolute bottom-1 right-1 rounded bg-black/50 p-1 text-white hover:bg-black/70"
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                      </a>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -434,40 +482,182 @@ export default function ReportDetailPage() {
 
       {/* Resolve Dialog */}
       <Dialog open={resolveDialogOpen} onOpenChange={setResolveDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>
               {actionType === "resolve" ? "Resoudre le signalement" : "Rejeter le signalement"}
             </DialogTitle>
             <DialogDescription>
               {actionType === "resolve"
-                ? "Vous pouvez prendre une action contre l'utilisateur signale."
-                : "Ce signalement sera marque comme rejete."}
+                ? "Selectionnez les actions a effectuer contre l'utilisateur signale."
+                : "Ce signalement sera marque comme rejete (faux signalement ou non justifie)."}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
-            <Textarea
-              placeholder="Note de resolution..."
-              value={resolution}
-              onChange={(e) => setResolution(e.target.value)}
-              rows={3}
-            />
+          <div className="space-y-4 max-h-[60vh] overflow-y-auto">
+            {/* Note de résolution */}
+            <div>
+              <label className="text-sm font-medium">Note de resolution</label>
+              <Textarea
+                placeholder="Decrivez la raison de votre decision..."
+                value={resolution}
+                onChange={(e) => setResolution(e.target.value)}
+                rows={2}
+                className="mt-1"
+              />
+            </div>
 
             {actionType === "resolve" && (
+              <>
+                {/* Actions sur le contenu */}
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-orange-600">Actions sur le contenu</p>
+                  <div className="space-y-2 rounded-lg border p-3 bg-orange-50">
+                    {report.evidenceUrls && report.evidenceUrls.length > 0 && (
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={selectedActions.includes("delete_evidence_photos")}
+                          onChange={() => toggleAction("delete_evidence_photos")}
+                          className="rounded border-gray-300"
+                        />
+                        <span className="text-sm">Supprimer les photos signalees ({report.evidenceUrls.length})</span>
+                      </label>
+                    )}
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selectedActions.includes("delete_profile_photos")}
+                        onChange={() => toggleAction("delete_profile_photos")}
+                        className="rounded border-gray-300"
+                      />
+                      <span className="text-sm">Supprimer toutes les photos de profil</span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Avertissements */}
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-yellow-600">Avertissements</p>
+                  <div className="space-y-2 rounded-lg border p-3 bg-yellow-50">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selectedActions.includes("warn")}
+                        onChange={() => toggleAction("warn")}
+                        className="rounded border-gray-300"
+                      />
+                      <span className="text-sm">Avertissement simple (log uniquement)</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selectedActions.includes("warn_notify")}
+                        onChange={() => toggleAction("warn_notify")}
+                        className="rounded border-gray-300"
+                      />
+                      <span className="text-sm">Avertissement avec notification a l'utilisateur</span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Suspensions */}
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-red-600">Suspension du compte</p>
+                  <div className="space-y-2 rounded-lg border p-3 bg-red-50">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="suspension"
+                        checked={selectedActions.includes("suspend_1d")}
+                        onChange={() => toggleAction("suspend_1d")}
+                        className="border-gray-300"
+                      />
+                      <span className="text-sm">Suspension 1 jour</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="suspension"
+                        checked={selectedActions.includes("suspend_3d")}
+                        onChange={() => toggleAction("suspend_3d")}
+                        className="border-gray-300"
+                      />
+                      <span className="text-sm">Suspension 3 jours</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="suspension"
+                        checked={selectedActions.includes("suspend_7d")}
+                        onChange={() => toggleAction("suspend_7d")}
+                        className="border-gray-300"
+                      />
+                      <span className="text-sm">Suspension 7 jours</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="suspension"
+                        checked={selectedActions.includes("suspend_30d")}
+                        onChange={() => toggleAction("suspend_30d")}
+                        className="border-gray-300"
+                      />
+                      <span className="text-sm">Suspension 30 jours</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="suspension"
+                        checked={selectedActions.includes("ban")}
+                        onChange={() => toggleAction("ban")}
+                        className="border-gray-300"
+                      />
+                      <span className="text-sm font-medium text-red-700">Bannissement definitif</span>
+                    </label>
+                    {(selectedActions.some(a => a.startsWith("suspend") || a === "ban")) && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedActions(prev => prev.filter(a => !a.startsWith("suspend") && a !== "ban"))}
+                        className="text-xs text-gray-500 hover:text-gray-700 underline"
+                      >
+                        Annuler la suspension
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {actionType === "dismiss" && (
               <div className="space-y-2">
-                <p className="text-sm font-medium">Action contre l'utilisateur</p>
-                <Select value={userAction} onValueChange={setUserAction}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Aucune action" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">Aucune action</SelectItem>
-                    <SelectItem value="warn">Avertissement</SelectItem>
-                    <SelectItem value="suspend">Suspension (7 jours)</SelectItem>
-                    <SelectItem value="ban">Bannissement</SelectItem>
-                  </SelectContent>
-                </Select>
+                <p className="text-sm font-medium text-blue-600">Action sur le signaleur</p>
+                <div className="space-y-2 rounded-lg border p-3 bg-blue-50">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedActions.includes("warn_reporter")}
+                      onChange={() => toggleAction("warn_reporter")}
+                      className="rounded border-gray-300"
+                    />
+                    <span className="text-sm">Avertir le signaleur pour faux signalement</span>
+                  </label>
+                </div>
+              </div>
+            )}
+
+            {/* Résumé des actions */}
+            {selectedActions.length > 0 && (
+              <div className="rounded-lg border border-gray-300 p-3 bg-gray-50">
+                <p className="text-sm font-medium mb-2">Actions selectionnees ({selectedActions.length})</p>
+                <ul className="text-xs text-gray-600 space-y-1">
+                  {selectedActions.map(action => (
+                    <li key={action} className="flex items-center gap-1">
+                      <CheckCircle className="h-3 w-3 text-green-500" />
+                      {getActionLabel(action)}
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
           </div>
@@ -481,11 +671,28 @@ export default function ReportDetailPage() {
               onClick={handleAction}
               disabled={actionLoading}
             >
-              {actionType === "resolve" ? "Resoudre" : "Rejeter"}
+              {actionLoading ? "Traitement..." : actionType === "resolve" ? "Resoudre" : "Rejeter"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
   );
+}
+
+// Helper pour les labels d'actions
+function getActionLabel(action: string): string {
+  const labels: Record<string, string> = {
+    delete_evidence_photos: "Supprimer les photos signalees",
+    delete_profile_photos: "Supprimer les photos de profil",
+    warn: "Avertissement simple",
+    warn_notify: "Avertissement avec notification",
+    suspend_1d: "Suspension 1 jour",
+    suspend_3d: "Suspension 3 jours",
+    suspend_7d: "Suspension 7 jours",
+    suspend_30d: "Suspension 30 jours",
+    ban: "Bannissement definitif",
+    warn_reporter: "Avertir le signaleur",
+  };
+  return labels[action] || action;
 }

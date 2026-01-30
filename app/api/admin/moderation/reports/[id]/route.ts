@@ -11,6 +11,20 @@ import { ReportStatus, AccountStatus } from '@prisma/client';
 
 type RouteParams = { id: string };
 
+// Helper pour les labels de catégorie
+function getCategoryLabel(category: string): string {
+  const labels: Record<string, string> = {
+    INAPPROPRIATE_CONTENT: 'Contenu inapproprie',
+    HARASSMENT: 'Harcelement',
+    FAKE_PROFILE: 'Faux profil',
+    SPAM: 'Spam',
+    UNDERAGE: 'Mineur',
+    SCAM: 'Arnaque',
+    OTHER: 'Autre',
+  };
+  return labels[category] || category;
+}
+
 // Get report details
 async function handleGet(
   req: NextRequest,
@@ -135,7 +149,9 @@ async function handlePatch(
 ) {
   try {
     const body = await req.json();
-    const { status, resolution, userAction } = body;
+    const { status, resolution, actions } = body;
+    // Support ancien format (userAction) pour rétrocompatibilité
+    const userActions: string[] = actions || (body.userAction ? [body.userAction] : []);
 
     // Validate status
     if (!status || !Object.values(ReportStatus).includes(status)) {
@@ -152,6 +168,7 @@ async function handlePatch(
         targetUser: {
           select: {
             id: true,
+            email: true,
             accountStatus: true,
           }
         }
@@ -178,31 +195,133 @@ async function handlePatch(
         }
       });
 
-      // Take action against user if requested
-      let userActionResult = null;
-      if (userAction && status === 'RESOLVED') {
-        const targetUserId = report.targetUserId;
+      // Execute all requested actions
+      const actionsResults: any[] = [];
+      const targetUserId = report.targetUserId;
 
-        switch (userAction) {
-          case 'warn':
-            // Just log a warning
-            userActionResult = { action: 'warned' };
+      for (const action of userActions) {
+        switch (action) {
+          // ===== SUPPRESSION DE CONTENU =====
+          case 'delete_evidence_photos':
+            // Supprimer les photos signalées (dans evidenceUrls) si elles sont dans notre storage
+            if (report.evidenceUrls && report.evidenceUrls.length > 0) {
+              actionsResults.push({
+                action: 'delete_evidence_photos',
+                count: report.evidenceUrls.length,
+                note: 'Photos marquees pour suppression (Stream Chat)'
+              });
+              // Log l'action
+              await tx.adminLog.create({
+                data: {
+                  adminId: ctx.userId,
+                  actionType: 'CONTENT_REMOVED',
+                  targetUserId,
+                  details: {
+                    type: 'chat_photos',
+                    urls: report.evidenceUrls,
+                    reportId: params.id,
+                  }
+                }
+              });
+            }
             break;
 
-          case 'suspend':
-            // Suspend for 7 days
+          case 'delete_profile_photos':
+            // Supprimer toutes les photos de profil de l'utilisateur
+            const deletedPhotos = await tx.photo.deleteMany({
+              where: { userId: targetUserId }
+            });
+            actionsResults.push({
+              action: 'delete_profile_photos',
+              count: deletedPhotos.count
+            });
+            await tx.adminLog.create({
+              data: {
+                adminId: ctx.userId,
+                actionType: 'CONTENT_REMOVED',
+                targetUserId,
+                details: {
+                  type: 'profile_photos',
+                  count: deletedPhotos.count,
+                  reportId: params.id,
+                }
+              }
+            });
+            break;
+
+          // ===== AVERTISSEMENTS =====
+          case 'warn':
+            // Avertissement simple (juste log)
+            actionsResults.push({ action: 'warn' });
+            await tx.adminLog.create({
+              data: {
+                adminId: ctx.userId,
+                actionType: 'USER_WARNED',
+                targetUserId,
+                details: {
+                  reason: `Report: ${report.category}`,
+                  reportId: params.id,
+                }
+              }
+            });
+            break;
+
+          case 'warn_notify':
+            // Avertissement avec notification
+            await tx.notification.create({
+              data: {
+                userId: targetUserId,
+                type: 'SYSTEM',
+                title: 'Avertissement',
+                message: `Votre compte a recu un avertissement suite a un signalement pour: ${getCategoryLabel(report.category)}. Veuillez respecter les regles de la communaute.`,
+              }
+            });
+            actionsResults.push({ action: 'warn_notify' });
+            await tx.adminLog.create({
+              data: {
+                adminId: ctx.userId,
+                actionType: 'USER_WARNED',
+                targetUserId,
+                details: {
+                  reason: `Report: ${report.category}`,
+                  reportId: params.id,
+                  notified: true,
+                }
+              }
+            });
+            break;
+
+          // ===== SUSPENSIONS =====
+          case 'suspend_1d':
+          case 'suspend_3d':
+          case 'suspend_7d':
+          case 'suspend_30d':
+            const durations: Record<string, number> = {
+              'suspend_1d': 1,
+              'suspend_3d': 3,
+              'suspend_7d': 7,
+              'suspend_30d': 30,
+            };
+            const days = durations[action];
             await tx.user.update({
               where: { id: targetUserId },
               data: {
                 accountStatus: 'SUSPENDED',
                 suspensionReason: `Signalement: ${report.category}`,
                 suspendedAt: new Date(),
-                suspendedUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                suspendedUntil: new Date(Date.now() + days * 24 * 60 * 60 * 1000),
               }
             });
-            userActionResult = { action: 'suspended', duration: '7 days' };
-
-            // Log the suspension
+            // Notifier l'utilisateur de sa suspension
+            await tx.notification.create({
+              data: {
+                userId: targetUserId,
+                type: 'SYSTEM',
+                title: 'Compte suspendu',
+                message: `Votre compte a ete suspendu pour ${days} jour(s) suite a un signalement pour: ${getCategoryLabel(report.category)}.`,
+              }
+            });
+            actionsResults.push({ action: 'suspended', duration: `${days} days` });
             await tx.adminLog.create({
               data: {
                 adminId: ctx.userId,
@@ -211,18 +330,17 @@ async function handlePatch(
                 details: {
                   reason: `Report: ${report.category}`,
                   reportId: params.id,
-                  duration: '7 days',
+                  duration: `${days} days`,
                 }
               }
             });
             break;
 
+          // ===== BANNISSEMENT =====
           case 'ban':
-            // Only admins can ban
             if (!ctx.isAdmin) {
               throw new Error('Seuls les administrateurs peuvent bannir');
             }
-
             await tx.user.update({
               where: { id: targetUserId },
               data: {
@@ -231,9 +349,16 @@ async function handlePatch(
                 suspendedAt: new Date(),
               }
             });
-            userActionResult = { action: 'banned' };
-
-            // Log the ban
+            // Notifier l'utilisateur de son bannissement
+            await tx.notification.create({
+              data: {
+                userId: targetUserId,
+                type: 'SYSTEM',
+                title: 'Compte banni',
+                message: `Votre compte a ete definitivement banni pour violation des regles de la communaute.`,
+              }
+            });
+            actionsResults.push({ action: 'banned' });
             await tx.adminLog.create({
               data: {
                 adminId: ctx.userId,
@@ -246,10 +371,35 @@ async function handlePatch(
               }
             });
             break;
+
+          // ===== ACTIONS SUR LE SIGNALEUR (faux signalement) =====
+          case 'warn_reporter':
+            // Avertir le signaleur pour faux signalement
+            await tx.notification.create({
+              data: {
+                userId: report.reporterId,
+                type: 'SYSTEM',
+                title: 'Avertissement',
+                message: 'Votre signalement a ete juge abusif. Les faux signalements repetes peuvent entrainer une suspension de votre compte.',
+              }
+            });
+            actionsResults.push({ action: 'warn_reporter' });
+            await tx.adminLog.create({
+              data: {
+                adminId: ctx.userId,
+                actionType: 'USER_WARNED',
+                targetUserId: report.reporterId,
+                details: {
+                  reason: 'Faux signalement',
+                  reportId: params.id,
+                }
+              }
+            });
+            break;
         }
       }
 
-      return { updatedReport, userActionResult };
+      return { updatedReport, actionsResults };
     });
 
     // Log the report resolution
@@ -261,7 +411,7 @@ async function handlePatch(
         reportId: params.id,
         category: report.category,
         resolution,
-        userAction: result.userActionResult,
+        actions: result.actionsResults,
       },
       req
     );
@@ -283,7 +433,7 @@ async function handlePatch(
     return NextResponse.json({
       success: true,
       report: result.updatedReport,
-      userAction: result.userActionResult,
+      actions: result.actionsResults,
       message: `Signalement ${status === 'RESOLVED' ? 'resolu' : status === 'DISMISSED' ? 'rejete' : 'mis a jour'}`,
     });
 

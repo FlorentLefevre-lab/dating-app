@@ -335,6 +335,12 @@ export default function Navbar() {
               <DropdownMenuSeparator />
 
               <DropdownMenuItem asChild>
+                <Link href="/support" className="cursor-pointer">
+                  <span className="mr-3">🎫</span>
+                  Support / Signaler un bug
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
                 <Link href="/help" className="cursor-pointer">
                   <span className="mr-3">❓</span>
                   Aide
