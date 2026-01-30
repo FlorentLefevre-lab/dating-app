@@ -1,6 +1,3 @@
-Env path: C:\developement\FlowDating\dating-app\.env.local
-Dotenv result: loaded
-DATABASE_URL: SET
 -- CreateSchema
 CREATE SCHEMA IF NOT EXISTS "public";
 
