@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth'
 import { PrismaClient } from '@prisma/client';
+import { calculateAge } from '@/lib/zodiac';
 
 // Singleton pour Prisma (évite les multiples connexions)
 const globalForPrisma = globalThis as unknown as {
@@ -43,7 +44,7 @@ export async function GET(request: NextRequest) {
       id: user.id,
       name: user.name,
       email: user.email,
-      age: user.age,
+      age: user.birthDate ? calculateAge(new Date(user.birthDate)) : user.age,
       bio: user.bio,
       location: user.location,
       interests: user.interests || [],
@@ -133,7 +134,7 @@ export async function PUT(request: NextRequest) {
       id: updatedUser.id,
       name: updatedUser.name,
       email: updatedUser.email,
-      age: updatedUser.age,
+      age: updatedUser.birthDate ? calculateAge(new Date(updatedUser.birthDate)) : updatedUser.age,
       bio: updatedUser.bio,
       location: updatedUser.location,
       interests: updatedUser.interests || [],

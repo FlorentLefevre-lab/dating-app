@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import { calculateAge } from '@/lib/zodiac'
 
 export async function GET(request: NextRequest) {
   const session = await auth()  // ✅ Nouvelle syntaxe v5
@@ -18,7 +19,7 @@ export async function GET(request: NextRequest) {
         email: true,
         name: true,
         image: true,
-        age: true,
+        birthDate: true,
         bio: true,
         location: true,
         profession: true,
@@ -32,7 +33,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Utilisateur non trouvé' }, { status: 404 })
     }
 
-    return NextResponse.json(user)
+    return NextResponse.json({
+      ...user,
+      age: user.birthDate ? calculateAge(new Date(user.birthDate)) : null
+    })
   } catch (error) {
     console.error('Erreur récupération utilisateur:', error)
     return NextResponse.json({ error: 'Erreur serveur' }, { status: 500 })

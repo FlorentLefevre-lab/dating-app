@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { verifyAdminAccess } from '@/lib/admin/auth'
 import { AccountStatus, UserRole } from '@prisma/client'
+import { calculateAge } from '@/lib/zodiac'
 
 export async function GET(request: NextRequest) {
   const authResult = await verifyAdminAccess()
@@ -51,7 +52,7 @@ export async function GET(request: NextRequest) {
           email: true,
           name: true,
           image: true,
-          age: true,
+          birthDate: true,
           gender: true,
           location: true,
           accountStatus: true,
@@ -82,6 +83,7 @@ export async function GET(request: NextRequest) {
     // Formater les donnees
     const formattedUsers = users.map(user => ({
       ...user,
+      age: user.birthDate ? calculateAge(new Date(user.birthDate)) : null,
       matchesCount: user._count.matchesAsUser1 + user._count.matchesAsUser2,
       photosCount: user._count.photos,
       likesGivenCount: user._count.likesGiven,

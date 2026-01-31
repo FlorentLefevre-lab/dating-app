@@ -5,6 +5,7 @@
 import { auth } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { calculateAge } from '@/lib/zodiac';
 
 export async function GET(
   request: NextRequest,
@@ -32,7 +33,7 @@ export async function GET(
           name: true,
           email: true,
           image: true,
-          age: true,
+          birthDate: true,
           bio: true,
           location: true,
           profession: true,
@@ -73,6 +74,7 @@ export async function GET(
         success: true,
         user: {
           ...user,
+          age: user.birthDate ? calculateAge(new Date(user.birthDate)) : null,
           image: user.photos.find(p => p.isPrimary)?.url || user.photos[0]?.url || user.image,
         }
       });
@@ -125,7 +127,7 @@ export async function GET(
         id: true,
         name: true,
         image: true,
-        age: true,
+        birthDate: true,
         bio: true,
         location: true,
         profession: true,
@@ -168,6 +170,7 @@ export async function GET(
 
     const formattedUser = {
       ...user,
+      age: user.birthDate ? calculateAge(new Date(user.birthDate)) : null,
       image: user.photos.find(p => p.isPrimary)?.url || user.photos[0]?.url || user.image,
     };
 

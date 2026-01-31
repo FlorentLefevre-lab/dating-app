@@ -5,6 +5,7 @@
 import { auth } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { calculateAge } from '@/lib/zodiac';
 
 export async function GET(request: NextRequest) {
   console.log('[API users/list] Request received');
@@ -36,7 +37,7 @@ export async function GET(request: NextRequest) {
         // SECURITY: Do NOT expose email to other users
         // email: true, // REMOVED
         image: true,
-        age: true,
+        birthDate: true,
         bio: true,
         location: true,
         profession: true,
@@ -65,7 +66,7 @@ export async function GET(request: NextRequest) {
       id: user.id,
       name: user.name || 'Utilisateur',
       image: user.photos[0]?.url || user.image,
-      age: user.age,
+      age: user.birthDate ? calculateAge(new Date(user.birthDate)) : null,
       bio: user.bio,
       location: user.location,
       profession: user.profession,
@@ -165,7 +166,7 @@ export async function POST(request: NextRequest) {
         id: true,
         name: true,
         image: true,
-        age: true,
+        birthDate: true,
         bio: true,
         location: true,
         profession: true,
@@ -186,7 +187,7 @@ export async function POST(request: NextRequest) {
       id: user.id,
       name: user.name || 'Utilisateur',
       image: user.photos[0]?.url || user.image,
-      age: user.age,
+      age: user.birthDate ? calculateAge(new Date(user.birthDate)) : null,
       bio: user.bio,
       location: user.location,
       profession: user.profession,

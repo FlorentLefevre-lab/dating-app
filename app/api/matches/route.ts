@@ -7,6 +7,7 @@ import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { Match, MatchStats, MatchesResponse } from '@/types/matches';
 import { cache } from '@/lib/cache';
+import { calculateAge } from '@/lib/zodiac';
 
 /**
  * Invalide le cache des stats pour un ou plusieurs utilisateurs
@@ -83,7 +84,8 @@ export async function GET(request: NextRequest) {
               id: true,
               name: true,
               email: true,
-              age: true,
+              birthDate: true,
+              zodiacSign: true,
               bio: true,
               location: true,
               department: true,
@@ -109,7 +111,8 @@ export async function GET(request: NextRequest) {
               id: true,
               name: true,
               email: true,
-              age: true,
+              birthDate: true,
+              zodiacSign: true,
               bio: true,
               location: true,
               department: true,
@@ -185,12 +188,13 @@ export async function GET(request: NextRequest) {
       // 4. Calculer la compatibilité (exemple basique)
       const calculateCompatibility = (user: any): number => {
         if (!user.interests || user.interests.length === 0) return 75;
-        
+
         // TODO: Implémenter un vrai calcul de compatibilité basé sur les intérêts de l'utilisateur actuel
         const baseCompatibility = 70;
         const interestBonus = Math.min(user.interests.length * 2, 20);
-        const ageBonus = user.age && user.age >= 18 && user.age <= 35 ? 10 : 5;
-        
+        const userAge = user.birthDate ? calculateAge(new Date(user.birthDate)) : null;
+        const ageBonus = userAge && userAge >= 18 && userAge <= 35 ? 10 : 5;
+
         return Math.min(baseCompatibility + interestBonus + ageBonus, 99);
       };
 
@@ -210,13 +214,15 @@ export async function GET(request: NextRequest) {
 
       const formattedMatches: Match[] = filteredUsers.map(user => {
         const isOnline = calculateIsOnline(user);
+        const userAge = user.birthDate ? calculateAge(new Date(user.birthDate)) : 0;
         return {
           id: user.matchId,
           createdAt: user.matchedAt.toISOString(),
           user: {
             id: user.id,
             name: user.name || 'Utilisateur',
-            age: user.age || 0,
+            age: userAge,
+            zodiacSign: user.zodiacSign || undefined,
             bio: user.bio || '',
             location: user.location || '',
             department: user.department || '',
@@ -369,7 +375,7 @@ export async function POST(request: NextRequest) {
         select: {
           id: true,
           name: true,
-          age: true,
+          birthDate: true,
           location: true,
           photos: {
             where: { isPrimary: true },
@@ -450,7 +456,7 @@ export async function POST(request: NextRequest) {
           targetUser: {
             id: targetUser.id,
             name: targetUser.name,
-            age: targetUser.age,
+            age: targetUser.birthDate ? calculateAge(new Date(targetUser.birthDate)) : 0,
             location: targetUser.location,
             photo: targetUser.photos[0]?.url
           },

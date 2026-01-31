@@ -2,6 +2,22 @@
 
 import { ZODIAC_SIGNS } from '@/constants/profileData';
 
+// Mapping direct signe -> emoji pour usage côté client
+const ZODIAC_EMOJIS: Record<string, string> = {
+  belier: '\u2648',
+  taureau: '\u2649',
+  gemeaux: '\u264A',
+  cancer: '\u264B',
+  lion: '\u264C',
+  vierge: '\u264D',
+  balance: '\u264E',
+  scorpion: '\u264F',
+  sagittaire: '\u2650',
+  capricorne: '\u2651',
+  verseau: '\u2652',
+  poissons: '\u2653'
+};
+
 // Plages de dates pour chaque signe du zodiaque
 const ZODIAC_DATES: Array<{
   sign: string;
@@ -72,6 +88,16 @@ export function calculateAge(birthDate: Date): number {
 export function getZodiacLabel(sign: string): string {
   const zodiacSign = ZODIAC_SIGNS.find(z => z.value === sign);
   return zodiacSign?.label || sign;
+}
+
+/**
+ * Retourne uniquement l'emoji du signe du zodiaque
+ * @param sign - La valeur du signe (ex: 'belier')
+ * @returns L'emoji du signe (ex: '♈') ou chaîne vide si non trouvé
+ */
+export function getZodiacEmoji(sign: string | null | undefined): string {
+  if (!sign) return '';
+  return ZODIAC_EMOJIS[sign.toLowerCase()] || '';
 }
 
 /**

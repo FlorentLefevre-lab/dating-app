@@ -1,6 +1,7 @@
 // src/lib/cache.ts - Redis-backed cache with fallback to memory
 
 import { getRedisClient, isRedisHealthy } from './redis';
+import { createHash } from 'crypto';
 
 interface CacheOptions {
   ttl?: number;
@@ -275,13 +276,17 @@ class CacheManager {
 
   async cacheDiscoverResults(userId: string, filters: unknown, results: unknown): Promise<void> {
     const filtersKey = JSON.stringify(filters);
-    const key = `discover:${userId}:${Buffer.from(filtersKey).toString('base64').slice(0, 20)}`;
+    // Utiliser un hash MD5 pour garantir l'unicité de la clé
+    const hash = createHash('md5').update(filtersKey).digest('hex');
+    const key = `discover:${userId}:${hash}`;
     await this.set(key, results, { prefix: 'api:', ttl: 180 });
   }
 
   async getDiscoverResults(userId: string, filters: unknown): Promise<unknown | null> {
     const filtersKey = JSON.stringify(filters);
-    const key = `discover:${userId}:${Buffer.from(filtersKey).toString('base64').slice(0, 20)}`;
+    // Utiliser un hash MD5 pour garantir l'unicité de la clé
+    const hash = createHash('md5').update(filtersKey).digest('hex');
+    const key = `discover:${userId}:${hash}`;
     return await this.get(key, { prefix: 'api:' });
   }
 

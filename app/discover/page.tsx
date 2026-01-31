@@ -4,6 +4,7 @@ import { SimpleLoading, SimpleError, Button, Card, PhotoCarousel, Badge, Input }
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Heart, Star, MapPin, Briefcase, Eye, RefreshCw, SlidersHorizontal, Settings, ChevronDown, ChevronUp, Search, Loader2 } from 'lucide-react';
+import { getZodiacEmoji } from '@/lib/zodiac';
 
 // ================================
 // TYPES
@@ -13,6 +14,7 @@ interface Profile {
   id: string;
   name: string;
   age: number;
+  zodiacSign?: string;
   bio?: string;
   location?: string;
   profession?: string;
@@ -109,7 +111,7 @@ const ProfileModal = ({
           <div className="mb-4">
             <div className="flex items-center gap-3 mb-2">
               <h2 className="text-2xl font-bold text-gray-900">
-                {profile.name}, {profile.age}
+                {profile.name}, {profile.age}{profile.zodiacSign && ` ${getZodiacEmoji(profile.zodiacSign)}`}
               </h2>
               {profile.isOnline && (
                 <span className="flex items-center gap-1 text-green-600 text-sm">
@@ -304,7 +306,7 @@ const ProfileCard = ({
         {/* Infos sur la photo - z-30 pour être au-dessus du gradient */}
         <div className="absolute bottom-0 left-0 right-0 p-3 text-white z-30 pointer-events-none">
           <h3 className="text-lg font-bold truncate drop-shadow-lg">
-            {profile.name}, {profile.age}
+            {profile.name}, {profile.age}{profile.zodiacSign && ` ${getZodiacEmoji(profile.zodiacSign)}`}
           </h3>
           <div className="flex items-center gap-2 text-sm">
             {profile.location && (
@@ -517,6 +519,7 @@ export default function DiscoverPage() {
         id: profile.id,
         name: profile.name || 'Nom inconnu',
         age: profile.age || 25,
+        zodiacSign: profile.zodiacSign,
         bio: profile.bio,
         location: profile.location,
         profession: profile.profession,
@@ -605,6 +608,12 @@ export default function DiscoverPage() {
   // Recharger les profils quand la distance change (avec debounce)
   const handleDistanceChange = (newDistance: number) => {
     setDistanceFilter(newDistance);
+  };
+
+  // Effect pour recharger quand distanceFilter change (avec debounce)
+  useEffect(() => {
+    // Ne pas déclencher au premier rendu
+    if (loading) return;
 
     // Annuler le précédent timeout
     if (distanceDebounceRef.current) {
@@ -613,18 +622,17 @@ export default function DiscoverPage() {
 
     // Déclencher le rechargement après 500ms d'inactivité
     distanceDebounceRef.current = setTimeout(() => {
-      loadProfiles(userPreferences, newDistance, false);
+      console.log('🔄 Rechargement avec distance:', distanceFilter);
+      loadProfiles(userPreferences, distanceFilter, false);
     }, 500);
-  };
 
-  // Cleanup du timeout au démontage
-  useEffect(() => {
     return () => {
       if (distanceDebounceRef.current) {
         clearTimeout(distanceDebounceRef.current);
       }
     };
-  }, []);
+  }, [distanceFilter]);
+
 
   // Filtrage local des profils
   const filteredProfiles = useMemo(() => {
@@ -830,7 +838,9 @@ export default function DiscoverPage() {
                       step="10"
                       value={distanceFilter}
                       onChange={(e) => handleDistanceChange(Number(e.target.value))}
-                      className="w-full max-w-md h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-pink-500"
+                      className="w-full max-w-md h-3 bg-gradient-to-r from-pink-200 to-purple-200 rounded-lg appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed
+                        [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:h-6 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-gradient-to-r [&::-webkit-slider-thumb]:from-pink-500 [&::-webkit-slider-thumb]:to-purple-500 [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white
+                        [&::-moz-range-thumb]:w-6 [&::-moz-range-thumb]:h-6 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-gradient-to-r [&::-moz-range-thumb]:from-pink-500 [&::-moz-range-thumb]:to-purple-500 [&::-moz-range-thumb]:cursor-pointer [&::-moz-range-thumb]:shadow-lg [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-white"
                       disabled={!userLocation}
                     />
                     <div className="flex justify-between text-xs text-gray-500 max-w-md">

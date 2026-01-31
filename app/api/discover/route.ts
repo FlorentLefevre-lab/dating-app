@@ -79,7 +79,8 @@ async function handleGetDiscover(request: NextRequest) {
         meta: {
           responseTime: Date.now() - startTime,
           cacheHit: true,
-          source: 'cache'
+          source: 'cache',
+          userLocation: currentUser.location
         }
       });
       response.headers.set('X-Cache', 'HIT');
@@ -218,6 +219,7 @@ async function handleGetDiscover(request: NextRequest) {
         // SECURITY: Do NOT expose email in discover endpoint
         id: true, name: true, birthDate: true, age: true, bio: true,
         location: true, profession: true, gender: true, interests: true,
+        zodiacSign: true, // Pour afficher le signe du zodiaque
         role: true, // Pour afficher badge Admin/Moderator
         hasDonated: true, // Pour afficher badge Supporter
         createdAt: true, lastSeen: true,
@@ -288,6 +290,7 @@ async function handleGetDiscover(request: NextRequest) {
         location: user.location || 'Lieu non précisé',
         profession: user.profession || 'Profession non précisée',
         gender: user.gender,
+        zodiacSign: user.zodiacSign, // Signe du zodiaque
         role: user.role, // Pour afficher badge Admin/Moderator
         interests: user.interests || [],
         photos: user.photos.length > 0 ? user.photos : [{

@@ -6,6 +6,7 @@ export interface User {
   id: string;
   name: string;
   age: number;
+  zodiacSign?: string;
   bio?: string;
   location?: string;
   department?: string;

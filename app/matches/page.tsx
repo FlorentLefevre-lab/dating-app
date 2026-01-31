@@ -42,6 +42,7 @@ import {
 } from 'lucide-react';
 import { useMatches } from '@/hooks/useMatches';
 import { Match } from '@/types/matches';
+import { getZodiacEmoji } from '@/lib/zodiac';
 import {
   Button,
   Card,
@@ -297,6 +298,7 @@ const ProfileModal = ({
                 <h2 className="text-2xl font-bold text-gray-900">
                   {profile.name}
                   {profile.age && <span className="text-gray-600 font-normal">, {profile.age} ans</span>}
+                  {profile.zodiacSign && <span className="text-purple-500 ml-1">{getZodiacEmoji(profile.zodiacSign)}</span>}
                 </h2>
               </div>
 
@@ -655,7 +657,10 @@ const MatchCard = ({ match, onOpenChat, onOpenProfile, isOpeningChat }: {
             <h3 className="font-semibold text-lg text-gray-900 truncate">
               {match.user.name}
             </h3>
-            <p className="text-gray-600">{match.user.age} ans</p>
+            <p className="text-gray-600">
+              {match.user.age} ans
+              {match.user.zodiacSign && <span className="text-purple-500 ml-1">{getZodiacEmoji(match.user.zodiacSign)}</span>}
+            </p>
           </div>
           <div className="text-right text-xs text-gray-500">
             <div>Match</div>
