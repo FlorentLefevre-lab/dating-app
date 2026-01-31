@@ -4,9 +4,22 @@ import { StreamChat } from 'stream-chat'
 import { prisma } from '@/lib/db'
 import { ReportCategory } from '@prisma/client'
 
-const apiKey = process.env.NEXT_PUBLIC_STREAM_API_KEY!
-const apiSecret = process.env.STREAM_API_SECRET || process.env.STREAM_SECRET_KEY!
-const serverClient = StreamChat.getInstance(apiKey, apiSecret)
+// Lazy initialization to avoid build-time errors when env vars are not available
+let serverClient: StreamChat | null = null
+
+function getServerClient(): StreamChat {
+  if (!serverClient) {
+    const apiKey = process.env.NEXT_PUBLIC_STREAM_API_KEY
+    const apiSecret = process.env.STREAM_API_SECRET || process.env.STREAM_SECRET_KEY
+
+    if (!apiKey || !apiSecret) {
+      throw new Error('Stream API configuration missing')
+    }
+
+    serverClient = StreamChat.getInstance(apiKey, apiSecret)
+  }
+  return serverClient
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -22,8 +35,11 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    // Get client lazily
+    const client = getServerClient()
+
     // Verify webhook signature
-    const isValid = serverClient.verifyWebhook(body, signature)
+    const isValid = client.verifyWebhook(body, signature)
     if (!isValid) {
       console.warn('[SECURITY] Invalid webhook signature')
       return NextResponse.json(
