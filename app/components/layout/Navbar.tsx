@@ -320,14 +320,17 @@ export default function Navbar() {
                 <span className="mr-3">⚙️</span>
                 Paramètres
               </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href="/premium" className="cursor-pointer flex-between w-full">
-                  <span><span className="mr-3">⭐</span>Premium</span>
-                  <span className="badge bg-gradient-to-r from-yellow-400 to-orange-500 text-white text-[10px]">
-                    Pro
-                  </span>
-                </Link>
-              </DropdownMenuItem>
+              {/* Premium - uniquement pour les utilisateurs lambda */}
+              {(session.user as any)?.role !== 'ADMIN' && (session.user as any)?.role !== 'MODERATOR' && (
+                <DropdownMenuItem asChild>
+                  <Link href="/premium" className="cursor-pointer flex-between w-full">
+                    <span><span className="mr-3">⭐</span>Premium</span>
+                    <span className="badge bg-gradient-to-r from-yellow-400 to-orange-500 text-white text-[10px]">
+                      Pro
+                    </span>
+                  </Link>
+                </DropdownMenuItem>
+              )}
 
               {/* Lien Admin pour ADMIN et MODERATOR */}
               {((session.user as any)?.role === 'ADMIN' || (session.user as any)?.role === 'MODERATOR') && (
@@ -356,14 +359,17 @@ export default function Navbar() {
                   Support / Bug
                 </Link>
               </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href="/donate" className="cursor-pointer flex-between w-full">
-                  <span><span className="mr-3">🪙</span>Faire un don</span>
-                  <span className="badge bg-gradient-to-r from-yellow-500 to-amber-500 text-white text-[10px]">
-                    Soutenir
-                  </span>
-                </Link>
-              </DropdownMenuItem>
+              {/* Don - uniquement pour les utilisateurs lambda */}
+              {(session.user as any)?.role !== 'ADMIN' && (session.user as any)?.role !== 'MODERATOR' && (
+                <DropdownMenuItem asChild>
+                  <Link href="/donate" className="cursor-pointer flex-between w-full">
+                    <span><span className="mr-3">🪙</span>Faire un don</span>
+                    <span className="badge bg-gradient-to-r from-yellow-500 to-amber-500 text-white text-[10px]">
+                      Soutenir
+                    </span>
+                  </Link>
+                </DropdownMenuItem>
+              )}
 
               <DropdownMenuSeparator />
 
@@ -444,22 +450,27 @@ export default function Navbar() {
                     Support / Bug
                   </Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/premium" className="cursor-pointer flex-between w-full">
-                    <span><span className="mr-3">👑</span>Premium</span>
-                    <span className="badge bg-gradient-to-r from-amber-400 to-yellow-500 text-white text-[10px]">
-                      Pro
-                    </span>
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/donate" className="cursor-pointer flex-between w-full">
-                    <span><span className="mr-3">🪙</span>Don</span>
-                    <span className="badge bg-gradient-to-r from-yellow-500 to-amber-500 text-white text-[10px]">
-                      Soutenir
-                    </span>
-                  </Link>
-                </DropdownMenuItem>
+                {/* Premium et Don - uniquement pour les utilisateurs lambda */}
+                {(session.user as any)?.role !== 'ADMIN' && (session.user as any)?.role !== 'MODERATOR' && (
+                  <>
+                    <DropdownMenuItem asChild>
+                      <Link href="/premium" className="cursor-pointer flex-between w-full">
+                        <span><span className="mr-3">👑</span>Premium</span>
+                        <span className="badge bg-gradient-to-r from-amber-400 to-yellow-500 text-white text-[10px]">
+                          Pro
+                        </span>
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/donate" className="cursor-pointer flex-between w-full">
+                        <span><span className="mr-3">🪙</span>Don</span>
+                        <span className="badge bg-gradient-to-r from-yellow-500 to-amber-500 text-white text-[10px]">
+                          Soutenir
+                        </span>
+                      </Link>
+                    </DropdownMenuItem>
+                  </>
+                )}
 
                 <DropdownMenuSeparator />
 
