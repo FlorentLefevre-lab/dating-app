@@ -56,15 +56,15 @@ async function handleRegister(request: NextRequest) {
     const expires = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 heures
     console.log('🔑 Token généré:', verificationToken.substring(0, 8) + '...')
 
-    // Enregistrer le token
-    const tokenCreated = await prisma.emailVerificationToken.create({
+    // Enregistrer le token (utilise VerificationToken avec identifier = email)
+    await prisma.verificationToken.create({
       data: {
-        email,
+        identifier: email,
         token: verificationToken,
         expires,
       }
     })
-    console.log('💾 Token enregistré en base:', tokenCreated.id)
+    console.log('💾 Token enregistré en base pour:', email)
 
     // Envoyer l'email de vérification
     console.log('📧 Envoi de l\'email de vérification...')
@@ -82,8 +82,7 @@ async function handleRegister(request: NextRequest) {
     return NextResponse.json({
       message: "Compte créé avec succès ! Vérifiez votre email pour activer votre compte.",
       user: userWithoutPassword,
-      emailSent,
-      tokenId: tokenCreated.id // Pour debug
+      emailSent
     })
 
   } catch (error) {
