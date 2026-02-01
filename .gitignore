@@ -1,31 +1,3 @@
-<<<<<<< HEAD
-# Dependencies
-node_modules/
-/.pnp
-.pnp.js
-.yarn/install-state.gz
-
-# Next.js
-/.next/
-/out/
-next-env.d.ts
-
-# Production
-/build
-
-# Misc
-.DS_Store
-*.tgz
-*.tar.gz
-
-# Debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Local env files
-.env
-=======
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
@@ -54,6 +26,8 @@ yarn-error.log*
 # misc
 .DS_Store
 *.pem
+*.tgz
+*.tar.gz
 
 # debug
 npm-debug.log*
@@ -66,7 +40,6 @@ yarn-error.log*
 # ==========================================
 # Tous les fichiers d'environnement (CRITIQUE pour site de rencontre)
 .env*
->>>>>>> 25ab2c001a6ea94fb8c2f59022ee5f7c1b3a9c34
 .env.local
 .env.development.local
 .env.test.local
@@ -192,6 +165,9 @@ logs/
 log/
 *.access.log
 *.error.log
+# Exception for admin logs pages
+!app/admin/logs/
+!app/api/admin/logs/
 
 # ==========================================
 # 🐳 DOCKER SENSIBLE
