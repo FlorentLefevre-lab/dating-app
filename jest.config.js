@@ -87,7 +87,6 @@ const config = {
   testPathIgnorePatterns: [
     '/node_modules/',
     '/.next/',
-    '/cypress/',
   ],
   watchPathIgnorePatterns: [
     '/node_modules/',

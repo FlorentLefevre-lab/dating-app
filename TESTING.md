@@ -8,8 +8,7 @@ This document provides comprehensive instructions for running and writing tests 
 2. [Setup](#setup)
 3. [Running Tests](#running-tests)
 4. [Writing Tests](#writing-tests)
-5. [CI/CD Integration](#cicd-integration)
-6. [Best Practices](#best-practices)
+5. [Best Practices](#best-practices)
 
 ---
 
@@ -30,11 +29,6 @@ __tests__/
 ├── fixtures/          # Test data
 ├── mocks/             # MSW handlers and mocks
 └── setup/             # Test configuration
-
-cypress/
-├── e2e/               # End-to-end tests
-├── fixtures/          # Cypress fixtures
-└── support/           # Cypress commands and setup
 ```
 
 ### Test Types
@@ -44,7 +38,6 @@ cypress/
 | Unit | Jest | Test individual functions/components | `__tests__/unit/` |
 | Integration | Jest | Test API routes and DB operations | `__tests__/integration/` |
 | Security | Jest | Test auth, rate limiting, injection | `__tests__/security/` |
-| E2E | Cypress | Test complete user flows | `cypress/e2e/` |
 
 ---
 
@@ -66,7 +59,6 @@ npm install
 npm install -D jest ts-jest @types/jest jest-environment-jsdom
 npm install -D @testing-library/react @testing-library/jest-dom @testing-library/user-event
 npm install -D msw jest-mock-extended
-npm install -D cypress @cypress/webpack-dev-server
 ```
 
 ### Environment Configuration
@@ -126,19 +118,6 @@ npm test -- __tests__/integration/db
 
 ```bash
 npm run test:security
-```
-
-### E2E Tests
-
-```bash
-# Open Cypress UI
-npm run test:e2e
-
-# Run headless
-npm run test:e2e:headless
-
-# Run specific spec
-npx cypress run --spec "cypress/e2e/auth.cy.ts"
 ```
 
 ### All Tests
@@ -202,77 +181,6 @@ describe('POST /api/auth/register', () => {
 });
 ```
 
-### E2E Test Example
-
-```typescript
-// cypress/e2e/auth.cy.ts
-describe('Authentication Flow', () => {
-  beforeEach(() => {
-    cy.clearDatabase();
-  });
-
-  it('should complete registration flow', () => {
-    cy.visit('/auth/register');
-    cy.getByTestId('name-input').type('Test User');
-    cy.getByTestId('email-input').type('test@example.com');
-    cy.getByTestId('password-input').type('SecurePass123!');
-    cy.getByTestId('confirm-password-input').type('SecurePass123!');
-    cy.getByTestId('submit-button').click();
-
-    cy.url().should('include', '/auth/verify-email');
-  });
-});
-```
-
-### Custom Cypress Commands
-
-```typescript
-// cypress/support/commands.ts
-
-// Login command
-Cypress.Commands.add('login', (email, password) => {
-  cy.visit('/auth/login');
-  cy.getByTestId('email-input').type(email);
-  cy.getByTestId('password-input').type(password);
-  cy.getByTestId('submit-button').click();
-  cy.url().should('not.include', '/auth/login');
-});
-
-// Create user via API
-Cypress.Commands.add('createUser', (userData) => {
-  return cy.task('createUser', userData);
-});
-```
-
----
-
-## CI/CD Integration
-
-### GitHub Actions
-
-The E2E tests run automatically on:
-- Push to `main` or `develop`
-- Pull requests to `main` or `develop`
-
-Configuration: `.github/workflows/e2e.yml`
-
-### Running in CI
-
-```yaml
-- name: Run Cypress tests
-  uses: cypress-io/github-action@v6
-  with:
-    start: npm run start
-    wait-on: 'http://localhost:3000'
-    browser: chrome
-```
-
-### Artifacts
-
-Failed tests automatically upload:
-- Screenshots: `cypress/screenshots/`
-- Videos: `cypress/videos/`
-
 ---
 
 ## Best Practices
@@ -296,13 +204,6 @@ Failed tests automatically upload:
 - Test happy path and error cases
 - Verify side effects (emails sent, data created)
 
-### E2E Tests
-
-- Test critical user flows
-- Use custom commands for repeated actions
-- Add `data-testid` attributes to elements
-- Handle async operations properly
-
 ### Security Tests
 
 - Test all protected routes
@@ -312,67 +213,17 @@ Failed tests automatically upload:
 
 ---
 
-## Data-TestId Attributes
-
-Add these attributes to components for reliable E2E testing:
-
-```tsx
-// Login Form
-<input data-testid="email-input" />
-<input data-testid="password-input" />
-<button data-testid="submit-button" />
-
-// Profile
-<textarea data-testid="bio-input" />
-<input data-testid="age-input" />
-<select data-testid="gender-select" />
-<button data-testid="save-button" />
-
-// Discovery
-<div data-testid="profile-card" />
-<button data-testid="like-button" />
-<button data-testid="dislike-button" />
-<button data-testid="super-like-button" />
-
-// Matches
-<div data-testid="match-card" />
-<button data-testid="chat-button" />
-<input data-testid="search-input" />
-
-// Chat
-<div data-testid="message-list" />
-<input data-testid="message-input" />
-<button data-testid="send-button" />
-```
-
----
-
 ## Troubleshooting
 
 ### Common Issues
-
-**Cypress not finding elements**
-- Add `data-testid` attributes
-- Increase timeout: `cy.get('[data-testid="x"]', { timeout: 10000 })`
 
 **Database connection errors**
 - Ensure test database exists
 - Check DATABASE_URL in .env.test
 
-**Flaky tests**
-- Add proper waits for async operations
-- Use `cy.wait('@alias')` for API calls
-
-**Session issues**
-- Clear cookies/localStorage in `beforeEach`
-- Use `cy.clearCookies()` and `cy.clearLocalStorage()`
-
 ### Debugging
 
 ```bash
-# Run Cypress with debug logs
-DEBUG=cypress:* npm run test:e2e
-
 # Run Jest with verbose output
 npm test -- --verbose
 
@@ -400,6 +251,5 @@ npm run test:coverage
 ## Resources
 
 - [Jest Documentation](https://jestjs.io/docs/getting-started)
-- [Cypress Documentation](https://docs.cypress.io)
 - [Testing Library](https://testing-library.com/docs/)
 - [MSW Documentation](https://mswjs.io/docs/)
