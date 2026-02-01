@@ -291,7 +291,13 @@ export default function Navbar() {
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel>
                 <p className="font-medium">{session.user?.name || 'Utilisateur'}</p>
-                <p className="text-xs text-muted-foreground">Membre Flow Dating</p>
+                <p className="text-xs text-muted-foreground">
+                  {(session.user as any)?.role === 'ADMIN'
+                    ? 'Administrateur'
+                    : (session.user as any)?.role === 'MODERATOR'
+                    ? 'Modérateur'
+                    : 'Membre Flow Dating'}
+                </p>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
 
@@ -399,7 +405,13 @@ export default function Navbar() {
                     )}
                     <div>
                       <p className="font-medium text-sm">{session.user?.name || 'Utilisateur'}</p>
-                      <p className="text-xs text-muted-foreground">Flow Dating</p>
+                      <p className="text-xs text-muted-foreground">
+                        {(session.user as any)?.role === 'ADMIN'
+                          ? 'Administrateur'
+                          : (session.user as any)?.role === 'MODERATOR'
+                          ? 'Modérateur'
+                          : 'Membre'}
+                      </p>
                     </div>
                   </div>
                 </DropdownMenuLabel>

@@ -1,9 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { Bell, Search, User, LogOut, Settings, Menu } from "lucide-react";
+import { Bell, User, LogOut, Settings, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,15 +28,6 @@ interface AdminHeaderProps {
 }
 
 export function AdminHeader({ user, notificationCount = 0, onMenuClick }: AdminHeaderProps) {
-  const [searchQuery, setSearchQuery] = React.useState("");
-
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (searchQuery.trim()) {
-      window.location.href = `/admin/users?search=${encodeURIComponent(searchQuery)}`;
-    }
-  };
-
   const userInitials = user?.name
     ?.split(" ")
     .map((n) => n[0])
@@ -57,19 +47,8 @@ export function AdminHeader({ user, notificationCount = 0, onMenuClick }: AdminH
         <span className="sr-only">Menu</span>
       </Button>
 
-      {/* Search */}
-      <form onSubmit={handleSearch} className="flex-1 max-w-md">
-        <div className="relative">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            type="search"
-            placeholder="Rechercher un utilisateur..."
-            className="pl-8 bg-muted/50"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
-      </form>
+      {/* Spacer */}
+      <div className="flex-1" />
 
       <div className="flex items-center gap-2">
         {/* Notifications */}
@@ -131,11 +110,6 @@ export function AdminHeader({ user, notificationCount = 0, onMenuClick }: AdminH
                 <p className="text-xs leading-none text-muted-foreground">
                   {user?.email}
                 </p>
-                {user?.role && (
-                  <Badge variant="secondary" className="mt-1 w-fit text-xs">
-                    {user.role}
-                  </Badge>
-                )}
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
