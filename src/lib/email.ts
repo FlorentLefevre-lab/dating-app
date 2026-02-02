@@ -7,20 +7,27 @@ import crypto from 'crypto';
 // Email validation regex (RFC 5322 compliant simplified)
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// SMTP Transporter with TLS configuration
-const transporter: Transporter = createTransport({
-  host: process.env.EMAIL_SERVER_HOST,
-  port: parseInt(process.env.EMAIL_SERVER_PORT || '587'),
-  secure: process.env.EMAIL_SERVER_PORT === '465', // TLS for port 465
-  auth: {
-    user: process.env.EMAIL_SERVER_USER,
-    pass: process.env.EMAIL_SERVER_PASSWORD,
-  },
-  tls: {
-    // Verify certificates only in production
-    rejectUnauthorized: process.env.NODE_ENV === 'production',
-  },
-});
+// SMTP Transporter with TLS configuration (lazy initialization for build compatibility)
+let _transporter: Transporter | null = null;
+
+function getTransporter(): Transporter {
+  if (!_transporter) {
+    _transporter = createTransport({
+      host: process.env.EMAIL_SERVER_HOST,
+      port: parseInt(process.env.EMAIL_SERVER_PORT || '587'),
+      secure: process.env.EMAIL_SERVER_PORT === '465', // TLS for port 465
+      auth: {
+        user: process.env.EMAIL_SERVER_USER,
+        pass: process.env.EMAIL_SERVER_PASSWORD,
+      },
+      tls: {
+        // Verify certificates only in production
+        rejectUnauthorized: process.env.NODE_ENV === 'production',
+      },
+    });
+  }
+  return _transporter;
+}
 
 // ==========================================
 // Security Helpers
@@ -220,7 +227,7 @@ export async function sendPasswordResetEmail(email: string): Promise<EmailResult
       `,
     };
 
-    await transporter.sendMail(mailOptions);
+    await getTransporter().sendMail(mailOptions);
 
     // Log success without exposing sensitive data
     console.log(`[Email] Password reset email sent to: ${sanitizeEmailForLog(normalizedEmail)}`);
@@ -417,7 +424,7 @@ export async function sendEmailVerification(email: string): Promise<EmailResult>
       `,
     };
 
-    await transporter.sendMail(mailOptions);
+    await getTransporter().sendMail(mailOptions);
 
     // Log success without exposing sensitive data
     console.log(`[Email] Verification email sent to: ${sanitizeEmailForLog(normalizedEmail)}`);
@@ -504,7 +511,7 @@ export async function getRateLimitStatus(
  */
 export async function verifySmtpConnection(): Promise<boolean> {
   try {
-    await transporter.verify();
+    await getTransporter().verify();
     console.log('[Email] SMTP connection verified');
     return true;
   } catch (error) {
@@ -618,7 +625,7 @@ export async function sendDonationNotificationEmail(data: DonationNotificationDa
       `,
     };
 
-    await transporter.sendMail(mailOptions);
+    await getTransporter().sendMail(mailOptions);
     console.log(`[Email] Donation notification sent for ${formattedAmount}`);
     return { success: true, message: 'Notification envoyee' };
   } catch (error) {
@@ -697,7 +704,7 @@ export async function sendDonationThankYouEmail(
       `,
     };
 
-    await transporter.sendMail(mailOptions);
+    await getTransporter().sendMail(mailOptions);
     console.log(`[Email] Thank you email sent to donor: ${sanitizeEmailForLog(email)}`);
     return { success: true, message: 'Email de remerciement envoye' };
   } catch (error) {
