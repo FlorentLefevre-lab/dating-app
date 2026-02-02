@@ -12,19 +12,20 @@ let _transporter: Transporter | null = null;
 
 function getTransporter(): Transporter {
   if (!_transporter) {
-    const port = process.env.SMTP_PORT || '587';
+    const port = parseInt(process.env.SMTP_PORT || '465');
     _transporter = createTransport({
       host: process.env.SMTP_HOST,
-      port: parseInt(port),
-      secure: port === '465', // TLS for port 465
+      port: port,
+      secure: true, // Always use SSL/TLS
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
       },
       tls: {
-        // Verify certificates only in production
-        rejectUnauthorized: process.env.NODE_ENV === 'production',
+        rejectUnauthorized: false, // Accept self-signed certs
       },
+      connectionTimeout: 30000, // 30 seconds
+      greetingTimeout: 15000,
     });
   }
   return _transporter;
