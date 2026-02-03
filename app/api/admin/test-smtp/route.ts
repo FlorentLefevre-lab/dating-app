@@ -100,6 +100,46 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // Si paramètre sendTo, envoyer un email de test
+  const sendTo = request.nextUrl.searchParams.get('sendTo')
+  if (sendTo) {
+    try {
+      const port = parseInt(process.env.SMTP_PORT || '587')
+      const useImplicitTLS = port === 465
+
+      const transporter = createTransport({
+        host: process.env.SMTP_HOST,
+        port: port,
+        secure: useImplicitTLS,
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS,
+        },
+        tls: { rejectUnauthorized: false },
+        connectionTimeout: 30000,
+      })
+
+      const info = await transporter.sendMail({
+        from: process.env.SMTP_FROM,
+        to: sendTo,
+        subject: '[TEST] Flow Dating - Test SMTP',
+        html: `<h1>✅ Test SMTP réussi !</h1><p>Envoyé le ${new Date().toLocaleString('fr-FR')}</p>`,
+      })
+
+      diagnostics.testEmail = {
+        status: '✅ Email envoyé',
+        to: sendTo,
+        messageId: info.messageId,
+      }
+    } catch (error) {
+      diagnostics.testEmail = {
+        status: '❌ Échec envoi',
+        to: sendTo,
+        error: error instanceof Error ? error.message : 'Erreur inconnue',
+      }
+    }
+  }
+
   return NextResponse.json(diagnostics, { status: 200 })
 }
 
