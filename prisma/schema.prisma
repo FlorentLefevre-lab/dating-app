@@ -178,6 +178,9 @@ model User {
   // Rôle utilisateur (admin)
   role UserRole @default(USER)
 
+  // Onboarding (une seule fois après inscription)
+  onboardingCompletedAt DateTime?
+
   // Données existantes
   interests         String[]
   primaryAuthMethod AuthMethod @default(EMAIL_PASSWORD)

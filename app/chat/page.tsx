@@ -13,13 +13,34 @@ import {
 } from 'stream-chat-react'
 import { useSearchParams } from 'next/navigation'
 import { useStreamChat } from '@/hooks/useStreamChat'
+import { useChatNotifications } from '@/hooks/useChatNotifications'
 import type { Channel as StreamChannel } from 'stream-chat'
 import { SimpleLoading, SimpleError, Button } from '@/components/ui'
+import { NotificationSettings } from '@/components/chat/NotificationSettings'
+import { CustomAttachment } from '@/components/chat/CustomAttachment'
+import { Bell, BellOff, Volume2, VolumeX } from 'lucide-react'
 
 function ChatContent() {
   const searchParams = useSearchParams()
   const { client, isConnecting, error: connectionError } = useStreamChat()
   const [activeChannel, setActiveChannel] = useState<StreamChannel | null>(null)
+  const [showNotificationSettings, setShowNotificationSettings] = useState(false)
+
+  // Hook pour les notifications
+  const {
+    notificationPermission,
+    requestPermission,
+    soundEnabled,
+    setSoundEnabled,
+    browserNotificationsEnabled,
+    setBrowserNotificationsEnabled,
+    testSound
+  } = useChatNotifications(client, {
+    enabled: true,
+    soundEnabled: true,
+    browserNotificationsEnabled: true,
+    volume: 0.5
+  })
 
   const userId = searchParams.get('userId')
   const matchId = searchParams.get('matchId')
@@ -82,6 +103,37 @@ function ChatContent() {
 
   return (
     <div className="chat-page-container">
+      {/* Bouton paramètres notifications */}
+      <button
+        onClick={() => setShowNotificationSettings(true)}
+        className="fixed top-20 right-4 z-40 p-2 bg-white rounded-full shadow-lg hover:shadow-xl transition-shadow flex items-center gap-1"
+        title="Paramètres de notification"
+      >
+        {soundEnabled ? (
+          <Volume2 className="w-5 h-5 text-pink-500" />
+        ) : (
+          <VolumeX className="w-5 h-5 text-gray-400" />
+        )}
+        {browserNotificationsEnabled && notificationPermission === 'granted' ? (
+          <Bell className="w-5 h-5 text-pink-500" />
+        ) : (
+          <BellOff className="w-5 h-5 text-gray-400" />
+        )}
+      </button>
+
+      {/* Panel paramètres */}
+      <NotificationSettings
+        isOpen={showNotificationSettings}
+        onClose={() => setShowNotificationSettings(false)}
+        notificationPermission={notificationPermission}
+        onRequestPermission={requestPermission}
+        soundEnabled={soundEnabled}
+        onSoundEnabledChange={setSoundEnabled}
+        browserNotificationsEnabled={browserNotificationsEnabled}
+        onBrowserNotificationsEnabledChange={setBrowserNotificationsEnabled}
+        onTestSound={testSound}
+      />
+
       <Chat client={client} theme="str-chat__theme-light">
         <ChannelList
           filters={{
@@ -91,7 +143,7 @@ function ChatContent() {
           sort={{ last_message_at: -1 }}
           options={{ presence: true, watch: true, limit: 30 }}
         />
-        <Channel channel={activeChannel || undefined}>
+        <Channel channel={activeChannel || undefined} Attachment={CustomAttachment}>
           <Window>
             <ChannelHeader />
             <MessageList

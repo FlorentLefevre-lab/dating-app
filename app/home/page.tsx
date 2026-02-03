@@ -7,6 +7,7 @@ import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import AuthGuard from '@/components/auth/AuthGuard'
+import OnboardingGuard from '@/components/auth/OnboardingGuard'
 import { RecentActivity } from '@/components/profile/RecentActivity'
 import { useStats } from '@/hooks/useStats'
 import { useQuery } from '@/hooks/useQuery'
@@ -452,6 +453,7 @@ export default function HomePage() {
 
   return (
     <AuthGuard requireAuth={true}>
+      <OnboardingGuard>
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           
@@ -925,6 +927,7 @@ export default function HomePage() {
           </Card>
         </div>
       )}
+      </OnboardingGuard>
     </AuthGuard>
   )
 }

@@ -20,6 +20,7 @@ import { useStreamChat } from '@/hooks/useStreamChat'
 import { useSession } from 'next-auth/react'
 import { CustomChannelPreview } from './CustomChannelPreview'
 import { CustomMessage } from './CustomMessage'
+import { CustomAttachment } from './CustomAttachment'
 import { EmptyStateIndicator } from './EmptyStateIndicator'
 
 interface ChatModalProps {
@@ -192,7 +193,7 @@ export function ChatModal({ isOpen, onClose, channelId, targetUserName, isCreati
                         {/* Zone de conversation */}
                         <div className={`${isMobile && !selectedChannel ? 'hidden' : 'flex'} flex-1 flex-col min-w-0`}>
                           {selectedChannel ? (
-                            <Channel channel={selectedChannel} Message={CustomMessage}>
+                            <Channel channel={selectedChannel} Message={CustomMessage} Attachment={CustomAttachment}>
                               <Window>
                                 <ChannelHeader />
                                 <MessageList />

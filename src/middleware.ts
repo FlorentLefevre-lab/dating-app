@@ -10,10 +10,16 @@ const publicPaths = new Set([
   '/auth/error',
   '/auth/verify-email',
   '/auth/reset-password',
+  '/auth/resend-verification',
   '/api/health',
   '/api/monitoring/health',
   '/api/ping',
   '/debug',
+])
+
+// Chemins qui nécessitent auth mais pas l'onboarding complété
+const onboardingPaths = new Set([
+  '/auth/onboarding',
 ])
 
 function isPublicPath(pathname: string): boolean {

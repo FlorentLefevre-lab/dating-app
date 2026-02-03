@@ -43,6 +43,7 @@ import {
 import { useMatches } from '@/hooks/useMatches';
 import { Match } from '@/types/matches';
 import { getZodiacEmoji } from '@/lib/zodiac';
+import OnboardingGuard from '@/components/auth/OnboardingGuard';
 import {
   Button,
   Card,
@@ -886,7 +887,7 @@ export default function MatchesPage() {
   }
 
   return (
-    <>
+    <OnboardingGuard>
       <div className="min-h-screen bg-gradient-to-br from-pink-50 to-purple-50">
         <div className="container mx-auto max-w-7xl p-4">
           {/* En-tête avec statistiques */}
@@ -1129,6 +1130,6 @@ export default function MatchesPage() {
           }}
         />
       )}
-    </>
+    </OnboardingGuard>
   );
 }

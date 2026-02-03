@@ -95,24 +95,40 @@
 
 .str-chat__message-input,
 .str-chat__input-flat {
-  padding-bottom: 12px !important;
-  margin-bottom: 0 !important;
+  padding-bottom: 16px !important;
+  margin-bottom: 8px !important;
   min-height: 60px !important;
+  border-bottom: none !important;
 }
 
 .str-chat__message-input-wrapper {
-  padding-bottom: 16px !important;
-  margin-bottom: env(safe-area-inset-bottom, 0) !important;
+  padding: 12px 16px 20px 16px !important;
+  margin-bottom: env(safe-area-inset-bottom, 8px) !important;
+  background-color: #fff !important;
 }
 
 .str-chat__main-panel-inner {
-  padding-bottom: 0 !important;
+  padding-bottom: 8px !important;
   overflow: visible !important;
 }
 
 .str-chat__input-flat-wrapper {
   min-height: 50px !important;
-  padding: 8px 12px !important;
+  padding: 10px 14px !important;
+  margin-bottom: 4px !important;
+}
+
+/* Textarea input */
+.str-chat__textarea textarea {
+  padding: 12px !important;
+  margin-bottom: 0 !important;
+}
+
+/* Container du footer de saisie */
+.str-chat__message-input-inner,
+.str-chat__input-flat-emojiselect,
+.str-chat__fileupload-wrapper {
+  margin-bottom: 4px !important;
 }
 
 /* ===== CHANNEL HEADER ===== */
@@ -294,4 +310,14 @@ body.chat-open {
   max-width: 100%;
   display: flex;
   overflow: hidden;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+/* Assurer que la zone de saisie ne soit pas rognée */
+.str-chat__channel .str-chat__container {
+  padding-bottom: 8px !important;
+}
+
+.str-chat__window {
+  padding-bottom: 4px !important;
 }

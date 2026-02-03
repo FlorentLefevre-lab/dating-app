@@ -5,6 +5,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Heart, Star, MapPin, Briefcase, Eye, RefreshCw, SlidersHorizontal, Settings, ChevronDown, ChevronUp, Search, Loader2 } from 'lucide-react';
 import { getZodiacEmoji } from '@/lib/zodiac';
+import OnboardingGuard from '@/components/auth/OnboardingGuard';
 
 // ================================
 // TYPES
@@ -32,6 +33,112 @@ interface Profile {
   distance?: number; // Distance en km depuis l'utilisateur connecté
 }
 
+interface ConfirmAction {
+  profileId: string;
+  profileName: string;
+  action: 'like' | 'dislike' | 'super_like';
+}
+
+// ================================
+// COMPOSANT MODAL DE CONFIRMATION
+// ================================
+
+const ConfirmModal = ({
+  confirmAction,
+  onConfirm,
+  onCancel
+}: {
+  confirmAction: ConfirmAction;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) => {
+  const getActionInfo = () => {
+    switch (confirmAction.action) {
+      case 'like':
+        return {
+          icon: <Heart className="w-8 h-8 text-pink-500" />,
+          title: "J'aime",
+          message: `Voulez-vous vraiment indiquer que vous aimez ${confirmAction.profileName} ?`,
+          confirmColor: 'bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white'
+        };
+      case 'dislike':
+        return {
+          icon: <span className="text-4xl">👎</span>,
+          title: "J'aime pas",
+          message: `Voulez-vous vraiment passer ${confirmAction.profileName} ?`,
+          confirmColor: 'bg-gray-500 hover:bg-gray-600 text-white'
+        };
+      case 'super_like':
+        return {
+          icon: <Star className="w-8 h-8 text-blue-500" />,
+          title: "J'adore",
+          message: `Voulez-vous vraiment envoyer un Super Like à ${confirmAction.profileName} ?`,
+          confirmColor: 'bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white'
+        };
+    }
+  };
+
+  const actionInfo = getActionInfo();
+
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCancel();
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [onCancel]);
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[60]"
+      onClick={onCancel}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.9 }}
+        transition={{ duration: 0.2 }}
+        className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl text-center"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Icône */}
+        <div className="flex justify-center mb-4">
+          <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center">
+            {actionInfo.icon}
+          </div>
+        </div>
+
+        {/* Titre */}
+        <h3 className="text-xl font-bold text-gray-900 mb-2">
+          {actionInfo.title}
+        </h3>
+
+        {/* Message */}
+        <p className="text-gray-600 mb-6">
+          {actionInfo.message}
+        </p>
+
+        {/* Boutons */}
+        <div className="flex gap-3">
+          <Button
+            onClick={onCancel}
+            variant="outline"
+            className="flex-1"
+          >
+            Annuler
+          </Button>
+          <Button
+            onClick={onConfirm}
+            className={`flex-1 ${actionInfo.confirmColor}`}
+          >
+            Confirmer
+          </Button>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
 // ================================
 // COMPOSANT MODAL PROFIL
 // ================================
@@ -39,11 +146,13 @@ interface Profile {
 const ProfileModal = ({
   profile,
   onClose,
-  onAction
+  onAction,
+  onRequestConfirm
 }: {
   profile: Profile;
   onClose: () => void;
   onAction: (action: string) => void;
+  onRequestConfirm: (action: 'like' | 'dislike' | 'super_like') => void;
 }) => {
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -203,28 +312,31 @@ const ProfileModal = ({
         {/* Actions */}
         <div className="p-4 border-t bg-gray-50 flex justify-center gap-4">
           <Button
-            onClick={() => onAction('dislike')}
+            onClick={() => onRequestConfirm('dislike')}
             variant="outline"
             size="lg"
             className="w-16 h-16 rounded-full border-2 border-gray-300 hover:border-gray-400 hover:bg-gray-100"
+            title="J'aime pas"
           >
             <span className="text-2xl">👎</span>
           </Button>
 
           <Button
-            onClick={() => onAction('super_like')}
+            onClick={() => onRequestConfirm('super_like')}
             variant="outline"
             size="lg"
             className="w-16 h-16 rounded-full border-2 border-blue-400 hover:border-blue-500 hover:bg-blue-50"
+            title="J'adore"
           >
             <Star className="w-7 h-7 text-blue-500" />
           </Button>
 
           <Button
-            onClick={() => onAction('like')}
+            onClick={() => onRequestConfirm('like')}
             variant="default"
             size="lg"
             className="w-16 h-16 rounded-full bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white"
+            title="J'aime"
           >
             <Heart className="w-7 h-7" />
           </Button>
@@ -242,12 +354,14 @@ const ProfileCard = ({
   profile,
   onAction,
   onViewProfile,
-  isProcessing
+  isProcessing,
+  onRequestConfirm
 }: {
   profile: Profile;
   onAction: (action: string) => void;
   onViewProfile: () => void;
   isProcessing: boolean;
+  onRequestConfirm: (action: 'like' | 'dislike' | 'super_like') => void;
 }) => {
   return (
     <motion.div
@@ -355,31 +469,34 @@ const ProfileCard = ({
         {/* Boutons d'action */}
         <div className="flex justify-center gap-2">
           <Button
-            onClick={() => onAction('dislike')}
+            onClick={() => onRequestConfirm('dislike')}
             variant="ghost"
             size="sm"
             className="w-12 h-12 rounded-full bg-gray-100 hover:bg-gray-200"
             disabled={isProcessing}
+            title="J'aime pas"
           >
             <span className="text-xl">👎</span>
           </Button>
 
           <Button
-            onClick={() => onAction('super_like')}
+            onClick={() => onRequestConfirm('super_like')}
             variant="ghost"
             size="sm"
             className="w-12 h-12 rounded-full bg-blue-100 hover:bg-blue-200"
             disabled={isProcessing}
+            title="J'adore"
           >
             <Star className="w-5 h-5 text-blue-500" />
           </Button>
 
           <Button
-            onClick={() => onAction('like')}
+            onClick={() => onRequestConfirm('like')}
             variant="ghost"
             size="sm"
             className="w-12 h-12 rounded-full bg-pink-100 hover:bg-pink-200"
             disabled={isProcessing}
+            title="J'aime"
           >
             <Heart className="w-5 h-5 text-pink-500" />
           </Button>
@@ -417,6 +534,9 @@ export default function DiscoverPage() {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isFiltering, setIsFiltering] = useState(false);
   const [userLocation, setUserLocation] = useState<string | null>(null);
+
+  // État pour la modale de confirmation
+  const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
 
   // Ref pour le debounce du slider de distance
   const distanceDebounceRef = useRef<NodeJS.Timeout | null>(null);
@@ -551,7 +671,7 @@ export default function DiscoverPage() {
   // ACTIONS
   // ================================
 
-  const handleAction = async (profileId: string, action: string) => {
+  const handleAction = useCallback(async (profileId: string, action: string) => {
     const profile = profiles.find(p => p.id === profileId);
     if (!profile) return;
 
@@ -591,7 +711,25 @@ export default function DiscoverPage() {
         return next;
       });
     }
-  };
+  }, [profiles, selectedProfile]);
+
+  // Demander confirmation avant une action
+  const requestConfirm = useCallback((profileId: string, profileName: string, action: 'like' | 'dislike' | 'super_like') => {
+    setConfirmAction({ profileId, profileName, action });
+  }, []);
+
+  // Confirmer l'action
+  const handleConfirm = useCallback(() => {
+    if (confirmAction) {
+      handleAction(confirmAction.profileId, confirmAction.action);
+      setConfirmAction(null);
+    }
+  }, [confirmAction, handleAction]);
+
+  // Annuler la confirmation
+  const handleCancelConfirm = useCallback(() => {
+    setConfirmAction(null);
+  }, []);
 
   // Chargement initial
   useEffect(() => {
@@ -691,6 +829,7 @@ export default function DiscoverPage() {
   }
 
   return (
+    <OnboardingGuard>
     <div className="min-h-screen bg-gradient-to-br from-pink-50 to-purple-50">
       {/* Header */}
       <div className="bg-white shadow-sm sticky top-0 z-40">
@@ -949,6 +1088,7 @@ export default function DiscoverPage() {
                     onAction={(action) => handleAction(profile.id, action)}
                     onViewProfile={() => handleViewProfile(profile)}
                     isProcessing={processingIds.has(profile.id)}
+                    onRequestConfirm={(action) => requestConfirm(profile.id, profile.name, action)}
                   />
                 ))}
               </AnimatePresence>
@@ -964,9 +1104,22 @@ export default function DiscoverPage() {
             profile={selectedProfile}
             onClose={() => setSelectedProfile(null)}
             onAction={(action) => handleAction(selectedProfile.id, action)}
+            onRequestConfirm={(action) => requestConfirm(selectedProfile.id, selectedProfile.name, action)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Modal de confirmation */}
+      <AnimatePresence>
+        {confirmAction && (
+          <ConfirmModal
+            confirmAction={confirmAction}
+            onConfirm={handleConfirm}
+            onCancel={handleCancelConfirm}
           />
         )}
       </AnimatePresence>
     </div>
+    </OnboardingGuard>
   );
 }
