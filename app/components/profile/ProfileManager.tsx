@@ -230,6 +230,7 @@ const ProfileManager: React.FC = () => {
   const showMessage = (msg: string, type: MessageType = 'success') => {
     setMessage(msg);
     setMessageType(type);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
     setTimeout(() => setMessage(''), 5000);
   };
 
@@ -286,7 +287,6 @@ const ProfileManager: React.FC = () => {
       console.log('✅ [ProfileManager] Session NextAuth rafraîchie');
 
       showMessage('✅ Informations de base sauvegardées !', 'success');
-      setActiveTab('overview');
     } catch (error) {
       console.error('❌ [ProfileManager] Erreur sauvegarde:', error);
       showMessage('❌ Erreur lors de la sauvegarde', 'error');
@@ -315,7 +315,6 @@ const ProfileManager: React.FC = () => {
       setProfile(prev => prev ? { ...prev, ...updatedData } : null);
       
       showMessage('✅ Informations personnelles sauvegardées !', 'success');
-      setActiveTab('overview');
     } catch (error) {
       console.error('❌ Erreur sauvegarde:', error);
       showMessage('❌ Erreur lors de la sauvegarde', 'error');
@@ -344,7 +343,6 @@ const ProfileManager: React.FC = () => {
       setProfile(prev => prev ? { ...prev, ...updatedData } : null);
 
       showMessage('Caractéristiques physiques sauvegardées !', 'success');
-      setActiveTab('overview');
     } catch (error) {
       console.error('Erreur sauvegarde:', error);
       showMessage('Erreur lors de la sauvegarde', 'error');
@@ -373,7 +371,6 @@ const ProfileManager: React.FC = () => {
       setProfile(prev => prev ? { ...prev, ...updatedData } : null);
 
       showMessage('Style de vie sauvegardé !', 'success');
-      setActiveTab('overview');
     } catch (error) {
       console.error('Erreur sauvegarde:', error);
       showMessage('Erreur lors de la sauvegarde', 'error');

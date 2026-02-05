@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useCallback, useState } from 'react';
+import React, { useRef, useCallback, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   XMarkIcon,
@@ -13,12 +13,108 @@ import {
 import { useNSFWDetection, NSFWResult } from '@/hooks/useNSFWDetection';
 import { PHOTO_CONFIG } from '@/lib/config/photos';
 
+// État de compression par image (index dans results)
+interface CompressionState {
+  status: 'pending' | 'compressing' | 'done' | 'too_large';
+  originalSize: number;
+  compressedSize?: number;
+  compressedFile?: File;
+  error?: string;
+}
+
+// Formater la taille en Ko/Mo lisible
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} o`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} Ko`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
+}
+
+// Compresser une image via Canvas API
+async function compressImage(
+  file: File
+): Promise<{ file: File; compressed: boolean } | null> {
+  const maxSize = PHOTO_CONFIG.compression.maxCompressedSize;
+
+  // Déjà sous la limite → pas de compression nécessaire
+  if (file.size <= maxSize) {
+    return { file, compressed: false };
+  }
+
+  // Les GIF ne peuvent pas être compressés via Canvas (perte d'animation)
+  if (file.type === 'image/gif') {
+    return null;
+  }
+
+  // Charger l'image dans un élément Image
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('Impossible de charger l\'image'));
+    image.src = URL.createObjectURL(file);
+  });
+
+  const originalWidth = img.naturalWidth;
+  const originalHeight = img.naturalHeight;
+
+  // Essayer chaque palier de compression
+  for (const step of PHOTO_CONFIG.compression.steps) {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) continue;
+
+    let targetWidth = originalWidth;
+    let targetHeight = originalHeight;
+
+    // Réduire les dimensions si maxDimension est défini
+    if (step.maxDimension !== null) {
+      const maxDim = step.maxDimension;
+      if (targetWidth > maxDim || targetHeight > maxDim) {
+        if (targetWidth >= targetHeight) {
+          targetHeight = Math.round((targetHeight / targetWidth) * maxDim);
+          targetWidth = maxDim;
+        } else {
+          targetWidth = Math.round((targetWidth / targetHeight) * maxDim);
+          targetHeight = maxDim;
+        }
+      }
+    }
+
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+    ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+
+    // Exporter en JPEG avec la qualité spécifiée
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob((b) => resolve(b), 'image/jpeg', step.quality);
+    });
+
+    if (blob && blob.size <= maxSize) {
+      // Nettoyer l'URL de l'objet
+      URL.revokeObjectURL(img.src);
+
+      const compressedFile = new File(
+        [blob],
+        file.name.replace(/\.[^.]+$/, '.jpg'),
+        { type: 'image/jpeg' }
+      );
+      return { file: compressedFile, compressed: true };
+    }
+  }
+
+  // Nettoyage
+  URL.revokeObjectURL(img.src);
+
+  // Aucun palier n'a suffi → refus
+  return null;
+}
+
 interface PhotoUploadPreviewProps {
   isOpen: boolean;
   onClose: () => void;
   onUpload: (files: File[]) => Promise<void>;
   maxFiles: number;
   remainingSlots: number;
+  initialFiles?: File[];
 }
 
 const PhotoUploadPreview: React.FC<PhotoUploadPreviewProps> = ({
@@ -27,9 +123,12 @@ const PhotoUploadPreview: React.FC<PhotoUploadPreviewProps> = ({
   onUpload,
   maxFiles,
   remainingSlots,
+  initialFiles,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isCompressing, setIsCompressing] = useState(false);
+  const [compressionStates, setCompressionStates] = useState<Map<number, CompressionState>>(new Map());
   const [dragOver, setDragOver] = useState(false);
 
   const {
@@ -44,6 +143,13 @@ const PhotoUploadPreview: React.FC<PhotoUploadPreviewProps> = ({
     blockedCount,
     analyzingCount,
   } = useNSFWDetection({ autoLoad: true });
+
+  // Analyser automatiquement les fichiers pré-sélectionnés à l'ouverture
+  useEffect(() => {
+    if (isOpen && initialFiles && initialFiles.length > 0 && results.length === 0) {
+      analyzeImages(initialFiles);
+    }
+  }, [isOpen, initialFiles]);
 
   // Gérer la sélection de fichiers
   const handleFileSelect = useCallback(async (files: FileList | null) => {
@@ -101,15 +207,71 @@ const PhotoUploadPreview: React.FC<PhotoUploadPreviewProps> = ({
     // On pourrait l'ajouter, mais pour l'instant on garde le comportement simple
   };
 
-  // Uploader les images validées
+  // Uploader les images validées (avec compression préalable)
   const handleUpload = async () => {
     const validImages = getValidImages();
     if (validImages.length === 0) return;
 
+    setIsCompressing(true);
+    const newStates = new Map<number, CompressionState>();
+
+    // Phase 1 : compresser chaque image valide
+    const filesToUpload: File[] = [];
+
+    for (let i = 0; i < results.length; i++) {
+      const result = results[i];
+      // Ignorer les images non valides (bloquées NSFW, en erreur, en analyse)
+      if (result.isInappropriate || result.isAnalyzing || result.error) continue;
+
+      newStates.set(i, {
+        status: 'compressing',
+        originalSize: result.file.size,
+      });
+      setCompressionStates(new Map(newStates));
+
+      try {
+        const compressed = await compressImage(result.file);
+
+        if (compressed) {
+          newStates.set(i, {
+            status: 'done',
+            originalSize: result.file.size,
+            compressedSize: compressed.file.size,
+            compressedFile: compressed.file,
+          });
+          filesToUpload.push(compressed.file);
+        } else {
+          // Compression impossible (toujours > 2 Mo ou GIF trop lourd)
+          const isGif = result.file.type === 'image/gif';
+          newStates.set(i, {
+            status: 'too_large',
+            originalSize: result.file.size,
+            error: isGif
+              ? 'GIF trop volumineux (2 Mo max, compression impossible)'
+              : 'Image trop volumineuse même après compression (2 Mo max)',
+          });
+        }
+      } catch {
+        newStates.set(i, {
+          status: 'too_large',
+          originalSize: result.file.size,
+          error: 'Erreur lors de la compression',
+        });
+      }
+
+      setCompressionStates(new Map(newStates));
+    }
+
+    setIsCompressing(false);
+
+    // Phase 2 : uploader les fichiers compressés/validés
+    if (filesToUpload.length === 0) return;
+
     setIsUploading(true);
     try {
-      await onUpload(validImages.map(r => r.file));
+      await onUpload(filesToUpload);
       clearResults();
+      setCompressionStates(new Map());
       onClose();
     } catch (error) {
       console.error('Erreur upload:', error);
@@ -121,6 +283,7 @@ const PhotoUploadPreview: React.FC<PhotoUploadPreviewProps> = ({
   // Fermer et nettoyer
   const handleClose = () => {
     clearResults();
+    setCompressionStates(new Map());
     onClose();
   };
 
@@ -219,7 +382,7 @@ const PhotoUploadPreview: React.FC<PhotoUploadPreviewProps> = ({
                     </p>
                   </div>
                   <p className="text-xs text-gray-400">
-                    JPEG, PNG, GIF - Max {Math.min(remainingSlots, maxFiles)} photo{Math.min(remainingSlots, maxFiles) > 1 ? 's' : ''}
+                    JPEG, PNG, GIF - 2 Mo max par image - Max {Math.min(remainingSlots, maxFiles)} photo{Math.min(remainingSlots, maxFiles) > 1 ? 's' : ''}
                   </p>
                 </div>
 
@@ -259,7 +422,7 @@ const PhotoUploadPreview: React.FC<PhotoUploadPreviewProps> = ({
                 {/* Grille */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {results.map((result, index) => (
-                    <PhotoPreviewCard key={index} result={result} />
+                    <PhotoPreviewCard key={index} result={result} compressionState={compressionStates.get(index)} />
                   ))}
                 </div>
 
@@ -297,16 +460,21 @@ const PhotoUploadPreview: React.FC<PhotoUploadPreviewProps> = ({
 
                   <button
                     onClick={handleUpload}
-                    disabled={validCount === 0 || isUploading || analyzingCount > 0}
+                    disabled={validCount === 0 || isUploading || isCompressing || analyzingCount > 0}
                     className={`
                       px-6 py-2 rounded-xl font-semibold transition-all
-                      ${validCount > 0 && !isUploading && analyzingCount === 0
+                      ${validCount > 0 && !isUploading && !isCompressing && analyzingCount === 0
                         ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white hover:shadow-lg'
                         : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                       }
                     `}
                   >
-                    {isUploading ? (
+                    {isCompressing ? (
+                      <span className="flex items-center gap-2">
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Compression...
+                      </span>
+                    ) : isUploading ? (
                       <span className="flex items-center gap-2">
                         <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                         Upload...
@@ -326,8 +494,9 @@ const PhotoUploadPreview: React.FC<PhotoUploadPreviewProps> = ({
 };
 
 // Composant pour une carte de prévisualisation
-const PhotoPreviewCard: React.FC<{ result: NSFWResult }> = ({ result }) => {
+const PhotoPreviewCard: React.FC<{ result: NSFWResult; compressionState?: CompressionState }> = ({ result, compressionState }) => {
   const { preview, isInappropriate, inappropriateReason, isAnalyzing, error } = result;
+  const isTooLarge = compressionState?.status === 'too_large';
 
   return (
     <div className="relative aspect-square rounded-xl overflow-hidden bg-gray-100">
@@ -335,7 +504,7 @@ const PhotoPreviewCard: React.FC<{ result: NSFWResult }> = ({ result }) => {
       <img
         src={preview}
         alt="Preview"
-        className={`w-full h-full object-cover ${isInappropriate ? 'blur-xl' : ''}`}
+        className={`w-full h-full object-cover ${isInappropriate || isTooLarge ? 'blur-xl' : ''}`}
       />
 
       {/* Overlay d'analyse */}
@@ -346,8 +515,31 @@ const PhotoPreviewCard: React.FC<{ result: NSFWResult }> = ({ result }) => {
         </div>
       )}
 
+      {/* Overlay de compression en cours */}
+      {compressionState?.status === 'compressing' && (
+        <div className="absolute inset-0 bg-blue-500/70 flex flex-col items-center justify-center">
+          <div className="w-8 h-8 border-3 border-white border-t-transparent rounded-full animate-spin mb-2" />
+          <span className="text-white text-sm font-medium">Compression...</span>
+        </div>
+      )}
+
+      {/* Overlay image trop volumineuse */}
+      {isTooLarge && !isAnalyzing && (
+        <div className="absolute inset-0 bg-red-600/90 flex flex-col items-center justify-center p-3">
+          <ExclamationTriangleIcon className="w-10 h-10 text-white mb-2" />
+          <span className="text-white text-sm font-semibold text-center">
+            Trop volumineuse
+          </span>
+          {compressionState.error && (
+            <span className="text-white/80 text-xs text-center mt-1">
+              {compressionState.error}
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Overlay d'erreur */}
-      {error && (
+      {error && !isTooLarge && (
         <div className="absolute inset-0 bg-red-500/80 flex flex-col items-center justify-center p-2">
           <ExclamationTriangleIcon className="w-8 h-8 text-white mb-2" />
           <span className="text-white text-xs text-center">{error}</span>
@@ -355,7 +547,7 @@ const PhotoPreviewCard: React.FC<{ result: NSFWResult }> = ({ result }) => {
       )}
 
       {/* Overlay de contenu inapproprié */}
-      {isInappropriate && !isAnalyzing && (
+      {isInappropriate && !isAnalyzing && !isTooLarge && (
         <div className="absolute inset-0 bg-red-600/90 flex flex-col items-center justify-center p-3">
           <ShieldExclamationIcon className="w-10 h-10 text-white mb-2" />
           <span className="text-white text-sm font-semibold text-center">
@@ -370,9 +562,23 @@ const PhotoPreviewCard: React.FC<{ result: NSFWResult }> = ({ result }) => {
       )}
 
       {/* Badge de validation */}
-      {!isAnalyzing && !isInappropriate && !error && (
+      {!isAnalyzing && !isInappropriate && !error && !isTooLarge && (
         <div className="absolute top-2 right-2 bg-green-500 text-white p-1 rounded-full">
           <CheckCircleIcon className="w-4 h-4" />
+        </div>
+      )}
+
+      {/* Badge taille du fichier */}
+      {!isAnalyzing && !isInappropriate && !error && compressionState?.status === 'done' && compressionState.compressedSize !== undefined && compressionState.compressedSize < compressionState.originalSize && (
+        <div className="absolute bottom-2 left-2 right-2 bg-black/60 text-white text-xs rounded-lg px-2 py-1 text-center">
+          {formatFileSize(compressionState.originalSize)} → {formatFileSize(compressionState.compressedSize)}
+        </div>
+      )}
+
+      {/* Taille originale si pas de compression */}
+      {!isAnalyzing && !isInappropriate && !error && !isTooLarge && !compressionState && (
+        <div className="absolute bottom-2 left-2 bg-black/50 text-white text-xs rounded-lg px-2 py-1">
+          {formatFileSize(result.file.size)}
         </div>
       )}
     </div>

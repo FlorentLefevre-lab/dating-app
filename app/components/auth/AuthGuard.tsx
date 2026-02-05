@@ -2,7 +2,7 @@
 
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { useEffect, ReactNode } from 'react'
+import { useEffect, useRef, ReactNode } from 'react'
 
 interface AuthGuardProps {
   children: ReactNode
@@ -17,6 +17,12 @@ export default function AuthGuard({
 }: AuthGuardProps) {
   const { data: session, status } = useSession()
   const router = useRouter()
+  const hasLoadedOnce = useRef(false)
+
+  // Marquer le premier chargement terminé
+  if (status !== 'loading') {
+    hasLoadedOnce.current = true
+  }
 
   useEffect(() => {
     if (status === 'loading') return // Attendre le chargement
@@ -34,8 +40,8 @@ export default function AuthGuard({
     }
   }, [session, status, router, requireAuth, redirectTo])
 
-  // Afficher un loader pendant la vérification
-  if (status === 'loading') {
+  // Afficher un loader seulement lors du chargement initial (pas lors d'un refresh de session)
+  if (status === 'loading' && !hasLoadedOnce.current) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
         <div className="text-center">

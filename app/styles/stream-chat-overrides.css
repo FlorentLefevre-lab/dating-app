@@ -321,3 +321,41 @@ body.chat-open {
 .str-chat__window {
   padding-bottom: 4px !important;
 }
+
+/* ===== PINNED MESSAGES ===== */
+
+/* Indicateur de message épinglé */
+.str-chat__message-pin-indicator {
+  display: flex !important;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: theme('colors.primary.500');
+  padding: 2px 0;
+  margin-bottom: 2px;
+}
+
+.str-chat__message-pin-indicator svg {
+  width: 14px;
+  height: 14px;
+  color: theme('colors.primary.500');
+}
+
+/* Fond subtil sur la bulle d'un message épinglé */
+.str-chat__message--pinned .str-chat__message-bubble {
+  background-color: theme('colors.primary.50') !important;
+  border-left: 3px solid theme('colors.primary.400') !important;
+}
+
+/* Pour mes messages épinglés, garder la couleur envoyée mais ajouter la bordure */
+.str-chat__message--me.str-chat__message--pinned .str-chat__message-bubble {
+  background-color: theme('colors.chat.bubble.sent') !important;
+  border-left: 3px solid theme('colors.primary.300') !important;
+}
+
+/* ===== EMOJI PICKER ===== */
+
+/* Z-index pour le popup emoji picker dans les modals */
+.str-chat__message-textarea-emoji-picker-container {
+  z-index: 60 !important;
+}

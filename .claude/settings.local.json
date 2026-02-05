@@ -39,7 +39,8 @@
       "Bash(git pull:*)",
       "Bash(git rm:*)",
       "Bash(node scripts/test-smtp.js:*)",
-      "WebFetch(domain:getstream.io)"
+      "WebFetch(domain:getstream.io)",
+      "Bash(npm ls:*)"
     ]
   }
 }

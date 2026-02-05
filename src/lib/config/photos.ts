@@ -9,10 +9,23 @@ export const PHOTO_CONFIG = {
   photosPerPage: parseInt(process.env.NEXT_PUBLIC_PHOTOS_PER_PAGE || '8', 10),
 
   // Limites techniques
-  maxFileSize: 10 * 1024 * 1024, // 10MB
+  maxFileSize: 2 * 1024 * 1024, // 2MB
   maxImageWidth: 2000,
   maxImageHeight: 2000,
   allowedFormats: ['jpg', 'jpeg', 'png', 'gif'],
+
+  // Compression client-side
+  compression: {
+    maxCompressedSize: 2 * 1024 * 1024, // 2MB - taille max après compression
+    steps: [
+      // Paliers de compression essayés dans l'ordre
+      { quality: 0.8, maxDimension: null },       // Qualité 0.8, taille originale
+      { quality: 0.6, maxDimension: null },       // Qualité 0.6, taille originale
+      { quality: 0.7, maxDimension: 1600 },       // Qualité 0.7, max 1600px
+      { quality: 0.7, maxDimension: 1200 },       // Qualité 0.7, max 1200px
+      { quality: 0.6, maxDimension: 800 },        // Qualité 0.6, max 800px
+    ] as { quality: number; maxDimension: number | null }[],
+  },
 };
 
 export function getMaxPhotos(isPremium: boolean): number {

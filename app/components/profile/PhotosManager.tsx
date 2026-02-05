@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   PhotoIcon,
@@ -11,12 +11,13 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   SparklesIcon,
-  ShieldCheckIcon
+  ShieldCheckIcon,
+  XMarkIcon
 } from '@heroicons/react/24/outline';
 
 import { Photo, PhotosManagerProps } from '@/types/profiles';
 import { PHOTO_CONFIG, getMaxPhotos } from '@/lib/config/photos';
-import PhotoUploadPreview from './PhotoUploadPreview';
+import { compressImage } from '@/lib/imageCompression';
 
 // Déclaration TypeScript pour Cloudinary
 declare global {
@@ -52,7 +53,9 @@ const PhotosManager: React.FC<PhotosManagerProps> = ({
   const [uploadQueue, setUploadQueue] = useState<number>(0);
   const [skippedPhotos, setSkippedPhotos] = useState<number>(0);
   const [currentPage, setCurrentPage] = useState(1);
-  const [showUploadPreview, setShowUploadPreview] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const [uploadErrors, setUploadErrors] = useState<string[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Calcul du max photos selon le statut premium (depuis config centralisée)
   const MAX_PHOTOS = getMaxPhotos(isPremium);
@@ -120,23 +123,22 @@ const PhotosManager: React.FC<PhotosManagerProps> = ({
     }
   };
 
-  // Uploader les fichiers validés par NSFW.js vers Cloudinary
+  // Uploader les fichiers validés vers Cloudinary
   const uploadValidatedFiles = async (files: File[]) => {
     setUploading(true);
     setUploadQueue(files.length);
 
     let successCount = 0;
-    let errorCount = 0;
+    const errors: string[] = [];
 
     for (const file of files) {
       // Vérifier qu'on n'a pas dépassé la limite
       if (localPhotos.length + successCount >= MAX_PHOTOS) {
-        console.warn('⚠️ Limite de photos atteinte');
+        errors.push(`${file.name} — Limite de ${MAX_PHOTOS} photos atteinte. Supprimez des photos existantes pour en ajouter de nouvelles.`);
         break;
       }
 
       try {
-        // Uploader vers Cloudinary via notre API
         const formData = new FormData();
         formData.append('file', file);
 
@@ -146,19 +148,20 @@ const PhotosManager: React.FC<PhotosManagerProps> = ({
         });
 
         if (!uploadResponse.ok) {
-          const error = await uploadResponse.json();
-          throw new Error(error.error || 'Erreur upload');
+          const errorData = await uploadResponse.json();
+          const serverMsg = errorData.error || 'Erreur inconnue du serveur';
+          throw new Error(serverMsg);
         }
 
         const { url } = await uploadResponse.json();
 
-        // Sauvegarder en base de données
         await savePhotoToDatabase(url);
         successCount++;
 
       } catch (error: any) {
         console.error('❌ Erreur upload fichier:', error);
-        errorCount++;
+        const reason = error?.message || 'Erreur inconnue';
+        errors.push(`${file.name} (${formatSize(file.size)}) — Échec de l'upload : ${reason}`);
       }
 
       setUploadQueue(prev => Math.max(0, prev - 1));
@@ -170,14 +173,107 @@ const PhotosManager: React.FC<PhotosManagerProps> = ({
     if (successCount > 0) {
       onMessage(`${successCount} photo${successCount > 1 ? 's' : ''} ajoutée${successCount > 1 ? 's' : ''} avec succès !`, 'success');
     }
-    if (errorCount > 0) {
-      onMessage(`${errorCount} photo${errorCount > 1 ? 's' : ''} n'ont pas pu être uploadée${errorCount > 1 ? 's' : ''}`, 'error');
+    if (errors.length > 0) {
+      console.log('⚠️ Erreurs upload:', errors);
+      setUploadErrors(prev => [...prev, ...errors]);
     }
   };
 
-  // Ouvrir le modal de prévisualisation NSFW
-  const openUploadPreview = () => {
-    setShowUploadPreview(true);
+  // Filtrer les fichiers images valides
+  const filterImageFiles = (fileList: FileList | File[]): File[] => {
+    const acceptedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+    return Array.from(fileList)
+      .filter(file => {
+        const isValidType = acceptedMimeTypes.includes(file.type.toLowerCase());
+        const isValidExtension = PHOTO_CONFIG.allowedFormats.some(
+          format => file.name.toLowerCase().endsWith(`.${format}`)
+        );
+        return isValidType || isValidExtension;
+      })
+      .slice(0, Math.min(remainingSlots, PHOTO_CONFIG.maxPhotosFree));
+  };
+
+  // Formater une taille en Mo lisible
+  const formatSize = (bytes: number): string => {
+    return (bytes / (1024 * 1024)).toFixed(1) + ' Mo';
+  };
+
+  // Compresser puis uploader les fichiers directement
+  const processAndUploadFiles = async (files: File[]) => {
+    if (files.length === 0) return;
+
+    setUploadErrors([]);
+    setUploading(true);
+    setUploadQueue(files.length);
+
+    const filesToUpload: File[] = [];
+    const errors: string[] = [];
+
+    for (const file of files) {
+      try {
+        const result = await compressImage(file);
+        if (result) {
+          filesToUpload.push(result.file);
+        } else {
+          const sizeMo = formatSize(file.size);
+          const isGif = file.type === 'image/gif';
+          errors.push(
+            isGif
+              ? `${file.name} (${sizeMo}) — Les GIF animés ne peuvent pas être compressés automatiquement. Utilisez un GIF de moins de 2 Mo ou convertissez-le en JPEG/PNG.`
+              : `${file.name} (${sizeMo}) — L'image est trop volumineuse. Malgré la compression automatique (réduction de qualité et de résolution), elle dépasse toujours la limite de 2 Mo. Recadrez ou réduisez la résolution de l'image avant de réessayer.`
+          );
+        }
+      } catch {
+        errors.push(
+          `${file.name} — Une erreur est survenue lors de la compression. Vérifiez que le fichier est une image valide (JPEG, PNG ou GIF).`
+        );
+      }
+    }
+
+    if (errors.length > 0) {
+      console.log('⚠️ Erreurs compression:', errors);
+      setUploadErrors(errors);
+    }
+
+    if (filesToUpload.length > 0) {
+      await uploadValidatedFiles(filesToUpload);
+    } else {
+      setUploading(false);
+      setUploadQueue(0);
+    }
+  };
+
+  // Quand des fichiers sont sélectionnés via l'input
+  const handleFilesSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const imageFiles = filterImageFiles(files);
+    // Reset l'input pour pouvoir re-sélectionner les mêmes fichiers
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+    processAndUploadFiles(imageFiles);
+  };
+
+  // Drag & drop sur la zone d'upload
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+    const imageFiles = filterImageFiles(e.dataTransfer.files);
+    processAndUploadFiles(imageFiles);
   };
 
   // Ouvrir le widget Cloudinary
@@ -215,7 +311,7 @@ const PhotosManager: React.FC<PhotosManagerProps> = ({
         sources: ['local', 'camera', 'image_search', 'url'],
         multiple: true,
         maxFiles: remainingSlots,
-        maxFileSize: 10000000, // 10MB
+        maxFileSize: 2000000, // 2MB
         resourceType: 'image',
         clientAllowedFormats: ['jpg', 'jpeg', 'png', 'gif'],
         maxImageWidth: 2000,
@@ -593,17 +689,22 @@ const PhotosManager: React.FC<PhotosManagerProps> = ({
         )}
       </div>
 
-      {/* Bouton d'upload avec protection NSFW */}
+      {/* Input fichier caché */}
+      <input
+        ref={fileInputRef}
+        id="photo-file-input"
+        type="file"
+        accept="image/jpeg,image/png,image/gif"
+        multiple
+        onChange={handleFilesSelected}
+        className="hidden"
+      />
+
+      {/* Zone d'upload : clic = file picker natif via label, drag & drop */}
       {canAddMore && (
         <div className="mb-8">
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={openUploadPreview}
-            disabled={uploading}
-            className={`upload-area ${uploading ? 'disabled' : ''}`}
-          >
-            {uploading ? (
+          {uploading ? (
+            <div className="upload-area disabled">
               <div className="flex flex-col items-center justify-center">
                 <div className="loading-spinner mb-3"></div>
                 <span className="text-gray-600 font-medium">
@@ -611,28 +712,70 @@ const PhotosManager: React.FC<PhotosManagerProps> = ({
                 </span>
                 <span className="text-sm text-gray-500">Traitement de vos photos</span>
               </div>
-            ) : (
+            </div>
+          ) : (
+            <label
+              htmlFor="photo-file-input"
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              className={`upload-area block cursor-pointer ${
+                dragOver ? 'ring-2 ring-pink-500 !bg-pink-50 !border-pink-500' : ''
+              }`}
+            >
               <div className="flex flex-col items-center justify-center">
                 <div className="flex items-center gap-3 mb-3">
                   <CameraIcon className="w-10 h-10 text-pink-500" />
                   <ArrowUpTrayIcon className="w-10 h-10 text-pink-500" />
                 </div>
                 <span className="text-gray-700 font-semibold text-lg mb-1">
-                  Ajouter des photos
+                  {dragOver ? 'Déposez vos photos ici' : 'Glissez vos photos ici'}
                 </span>
                 <span className="text-gray-500">
-                  Sélectionnez jusqu'à {remainingSlots} photo{remainingSlots > 1 ? 's' : ''}
+                  ou cliquez pour parcourir (max {remainingSlots} photo{remainingSlots > 1 ? 's' : ''})
                 </span>
                 <div className="flex items-center gap-1 text-xs text-green-600 mt-2">
                   <ShieldCheckIcon className="w-4 h-4" />
                   <span>Protection contre le contenu inapproprié</span>
                 </div>
                 <span className="text-xs text-gray-400 mt-1">
-                  Formats acceptés : JPEG, PNG, GIF
+                  Formats acceptés : JPEG, PNG, GIF - 2 Mo max par image
                 </span>
               </div>
-            )}
-          </motion.button>
+            </label>
+          )}
+        </div>
+      )}
+
+      {/* Erreurs de compression / taille affichées inline */}
+      {uploadErrors.length > 0 && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3 min-w-0">
+              <ExclamationTriangleIcon className="w-6 h-6 text-red-500 flex-shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <h4 className="font-semibold text-red-800 mb-2">
+                  {uploadErrors.length === 1
+                    ? 'Une photo n\'a pas pu être ajoutée'
+                    : `${uploadErrors.length} photos n'ont pas pu être ajoutées`}
+                </h4>
+                <ul className="space-y-2">
+                  {uploadErrors.map((error, i) => (
+                    <li key={i} className="text-sm text-red-700 leading-snug">
+                      {error}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+            <button
+              onClick={() => setUploadErrors([])}
+              className="p-1 text-red-400 hover:text-red-600 flex-shrink-0"
+              title="Fermer"
+            >
+              <XMarkIcon className="w-5 h-5" />
+            </button>
+          </div>
         </div>
       )}
 
@@ -827,17 +970,10 @@ const PhotosManager: React.FC<PhotosManagerProps> = ({
           <li>• Évitez les filtres trop prononcés</li>
           <li>• Souriez naturellement !</li>
           <li>• Formats acceptés : JPEG, PNG et GIF uniquement</li>
+          <li>• 2 Mo maximum par photo (compression automatique appliquée)</li>
         </ul>
       </div>
 
-      {/* Modal de prévisualisation avec validation NSFW */}
-      <PhotoUploadPreview
-        isOpen={showUploadPreview}
-        onClose={() => setShowUploadPreview(false)}
-        onUpload={uploadValidatedFiles}
-        maxFiles={PHOTO_CONFIG.maxPhotosFree}
-        remainingSlots={remainingSlots}
-      />
     </div>
   );
 };
