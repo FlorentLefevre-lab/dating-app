@@ -1,7 +1,7 @@
 'use client';
 
 import { SessionProvider, useSession } from 'next-auth/react';
-import { ReactNode } from 'react';
+import { ReactNode, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 import Navbar from '@/components/layout/Navbar';
 import { PresenceProvider } from '@/providers/PresenceProvider';
@@ -28,13 +28,23 @@ const PUBLIC_ROUTES = [
 function AuthenticatedLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { status } = useSession();
+  const wasAuthenticated = useRef(false);
+
+  if (status === 'authenticated') {
+    wasAuthenticated.current = true;
+  } else if (status === 'unauthenticated') {
+    wasAuthenticated.current = false;
+  }
+  // Quand status === 'loading' (refresh session), on garde la valeur précédente
 
   const isPublicRoute = PUBLIC_ROUTES.some(route =>
     pathname === route || pathname.startsWith('/auth/')
   );
 
+  const showAuthLayout = wasAuthenticated.current || status === 'authenticated';
+
   // Sur les routes publiques ou si non authentifié, pas de Navbar/Presence
-  if (isPublicRoute || status !== 'authenticated') {
+  if (isPublicRoute || !showAuthLayout) {
     return <main>{children}</main>;
   }
 
@@ -48,7 +58,7 @@ function AuthenticatedLayout({ children }: { children: ReactNode }) {
 
 export default function ClientProviders({ children }: ClientProvidersProps) {
   return (
-    <SessionProvider>
+    <SessionProvider refetchInterval={5 * 60}>
       <MaintenanceGuard>
         <AccountStatusChecker />
         <GlobalAnnouncement />

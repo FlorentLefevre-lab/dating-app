@@ -106,7 +106,7 @@ const POPULAR_INTERESTS = [
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const { data: session, status } = useSession();
+  const { data: session, status, update } = useSession();
   const [currentStep, setCurrentStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -214,6 +214,9 @@ export default function OnboardingPage() {
       if (!response.ok) {
         throw new Error(result.error || 'Erreur lors de la sauvegarde');
       }
+
+      // Rafraîchir la session pour mettre à jour onboardingCompleted
+      await update();
 
       // Redirection vers la page d'accueil
       router.push('/home');

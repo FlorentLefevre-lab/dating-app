@@ -53,7 +53,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               role: true,
               accountStatus: true,
               suspendedUntil: true,
-              suspensionReason: true
+              suspensionReason: true,
+              onboardingCompletedAt: true
             }
           })
 
@@ -125,6 +126,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             image: user.image,
             role: user.role,
             accountStatus: user.accountStatus,
+            onboardingCompleted: !!user.onboardingCompletedAt,
           }
         } catch (error) {
           // Re-throw custom errors (blocked, banned, suspended, email not verified)
@@ -165,12 +167,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.image = user.image
         token.role = (user as any).role || 'USER'
         token.accountStatus = (user as any).accountStatus || 'ACTIVE'
+        token.onboardingCompleted = (user as any).onboardingCompleted ?? false
       }
       // Refresh user data from database on session update or periodically
       if ((trigger === 'update' || !token.lastChecked || Date.now() - (token.lastChecked as number) > 60000) && token.id) {
         const dbUser = await prisma.user.findUnique({
           where: { id: token.id as string },
-          select: { name: true, image: true, role: true, accountStatus: true, suspendedUntil: true }
+          select: { name: true, image: true, role: true, accountStatus: true, suspendedUntil: true, onboardingCompletedAt: true }
         })
         if (dbUser) {
           token.name = dbUser.name
@@ -182,6 +185,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           } else {
             token.accountStatus = dbUser.accountStatus
           }
+          token.onboardingCompleted = !!dbUser.onboardingCompletedAt
           token.lastChecked = Date.now()
         }
       }
@@ -195,6 +199,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         session.user.image = token.image as string | null
         ;(session.user as any).role = (token.role as string) || 'USER'
         ;(session.user as any).accountStatus = (token.accountStatus as string) || 'ACTIVE'
+        ;(session.user as any).onboardingCompleted = token.onboardingCompleted ?? false
       }
       return session
     },
