@@ -3,7 +3,6 @@
 import { Suspense, useEffect, useState } from 'react'
 import {
   Chat,
-  ChannelList,
   Channel,
   Window,
   MessageList,
@@ -18,8 +17,11 @@ import { SimpleLoading, SimpleError, Button } from '@/components/ui'
 import { NotificationSettings } from '@/components/chat/NotificationSettings'
 import { CustomAttachment } from '@/components/chat/CustomAttachment'
 import { CustomEmojiPicker } from '@/components/chat/EmojiPickerWrapper'
+import { ChannelListWithTabs } from '@/components/chat/ChannelListWithTabs'
+import { FileUploadValidator } from '@/components/chat/FileUploadValidator'
 import { encodeToMp3 } from 'stream-chat-react/mp3-encoder'
 import { Bell, BellOff, Volume2, VolumeX } from 'lucide-react'
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable'
 
 function ChatContent() {
   const searchParams = useSearchParams()
@@ -104,6 +106,9 @@ function ChatContent() {
 
   return (
     <div className="chat-page-container">
+      {/* Validation des fichiers uploadés */}
+      <FileUploadValidator />
+
       {/* Bouton paramètres notifications */}
       <button
         onClick={() => setShowNotificationSettings(true)}
@@ -136,24 +141,27 @@ function ChatContent() {
       />
 
       <Chat client={client} theme="str-chat__theme-light">
-        <ChannelList
-          filters={{
-            type: 'messaging',
-            members: { $in: [client.userID!] }
-          }}
-          sort={{ last_message_at: -1 }}
-          options={{ presence: true, watch: true, limit: 30 }}
-        />
-        <Channel channel={activeChannel || undefined} Attachment={CustomAttachment} EmojiPicker={CustomEmojiPicker}>
-          <Window>
-            <ChannelHeader />
-            <MessageList
-              disableDateSeparator={false}
-              messageActions={['edit', 'delete', 'flag', 'pin', 'markUnread', 'react']}
+        <ResizablePanelGroup direction="horizontal" className="h-full">
+          <ResizablePanel defaultSize={25} minSize={15} maxSize={40}>
+            <ChannelListWithTabs
+              userId={client.userID!}
+              onChannelSelect={(channel) => setActiveChannel(channel)}
             />
-            <MessageInput focus audioRecordingEnabled audioRecordingConfig={{ transcoderConfig: { encoder: encodeToMp3 } }} />
-          </Window>
-        </Channel>
+          </ResizablePanel>
+          <ResizableHandle withHandle />
+          <ResizablePanel defaultSize={75}>
+            <Channel channel={activeChannel || undefined} Attachment={CustomAttachment} EmojiPicker={CustomEmojiPicker}>
+              <Window>
+                <ChannelHeader />
+                <MessageList
+                  disableDateSeparator={false}
+                  messageActions={['edit', 'delete', 'flag', 'pin', 'markUnread', 'react']}
+                />
+                <MessageInput focus audioRecordingEnabled audioRecordingConfig={{ transcoderConfig: { encoder: encodeToMp3 } }} />
+              </Window>
+            </Channel>
+          </ResizablePanel>
+        </ResizablePanelGroup>
       </Chat>
     </div>
   )

@@ -5,6 +5,7 @@ import { useEffect, useState, useRef, useCallback, memo } from 'react'
 import { Avatar, useChatContext } from 'stream-chat-react'
 import type { ChannelPreviewUIComponentProps } from 'stream-chat-react'
 import type { Event, UserResponse } from 'stream-chat'
+import { Pin, Archive, ArchiveRestore } from 'lucide-react'
 
 // Types
 interface OtherUser {
@@ -21,15 +22,23 @@ interface PresenceState {
   lastSeen: Date | null
 }
 
+interface CustomChannelPreviewProps extends ChannelPreviewUIComponentProps {
+  onArchiveClick?: (channel: any, userName: string) => void
+  onUnarchive?: () => void
+  isArchived?: boolean
+}
+
 /**
  * Composant de prévisualisation de channel personnalisé
  * Mémorisé pour éviter les re-renders inutiles
  */
 export const CustomChannelPreview = memo(function CustomChannelPreview(
-  props: ChannelPreviewUIComponentProps
+  props: CustomChannelPreviewProps
 ) {
-  const { channel, setActiveChannel, active, unread, lastMessage } = props
+  const { channel, setActiveChannel, active, unread, lastMessage, onArchiveClick, onUnarchive, isArchived } = props
   const { client } = useChatContext()
+  const [isPinned, setIsPinned] = useState(false)
+  const [isHovered, setIsHovered] = useState(false)
 
   const [otherUser, setOtherUser] = useState<OtherUser | null>(null)
   const [presence, setPresence] = useState<PresenceState>({
@@ -47,6 +56,14 @@ export const CustomChannelPreview = memo(function CustomChannelPreview(
       mountedRef.current = false
     }
   }, [])
+
+  // Récupérer le statut épinglé
+  useEffect(() => {
+    if (channel && client.userID) {
+      const membership = channel.state.membership
+      setIsPinned(!!membership?.pinned_at)
+    }
+  }, [channel, client.userID])
 
   // Fonction utilitaire pour calculer la présence
   const calculatePresence = useCallback((user: UserResponse | OtherUser): PresenceState => {
@@ -129,6 +146,42 @@ export const CustomChannelPreview = memo(function CustomChannelPreview(
     }
   }, [setActiveChannel, channel])
 
+  // Handler pin/unpin
+  const handlePinClick = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    try {
+      if (isPinned) {
+        await channel.unpin()
+        setIsPinned(false)
+      } else {
+        await channel.pin()
+        setIsPinned(true)
+      }
+    } catch (error) {
+      console.error('Erreur pin/unpin:', error)
+    }
+  }, [channel, isPinned])
+
+  // Handler archive
+  const handleArchiveClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (onArchiveClick) {
+      onArchiveClick(channel, otherUser?.name || 'Utilisateur')
+    }
+  }, [channel, onArchiveClick, otherUser?.name])
+
+  // Handler unarchive
+  const handleUnarchiveClick = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    try {
+      await channel.unarchive()
+      // Notifier le parent pour rafraîchir la liste
+      onUnarchive?.()
+    } catch (error) {
+      console.error('Erreur unarchive:', error)
+    }
+  }, [channel, onUnarchive])
+
   // Formater le dernier message
   const getLastMessagePreview = useCallback((): string => {
     if (!lastMessage) return 'Commencez la conversation'
@@ -167,57 +220,97 @@ export const CustomChannelPreview = memo(function CustomChannelPreview(
   if (!otherUser) return null
 
   return (
-    <button
+    <div
       className={`channel-preview ${active ? 'channel-preview--active' : ''} ${(unread ?? 0) > 0 ? 'channel-preview--unread' : ''}`}
-      onClick={handleClick}
-      type="button"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
-      <div className="channel-preview__avatar-wrapper">
-        <Avatar
-          image={otherUser.image}
-          name={otherUser.name || otherUser.id}
-        />
-        {/* Indicateur de présence */}
-        <div className={`presence-indicator ${presence.isOnline ? 'presence-indicator--online' : 'presence-indicator--offline'}`}>
-          <div className="presence-indicator__dot" />
+      <button
+        className="channel-preview__main"
+        onClick={handleClick}
+        type="button"
+      >
+        <div className="channel-preview__avatar-wrapper">
+          <Avatar
+            image={otherUser.image}
+            name={otherUser.name || otherUser.id}
+          />
+          {/* Indicateur de présence */}
+          <div className={`presence-indicator ${presence.isOnline ? 'presence-indicator--online' : 'presence-indicator--offline'}`}>
+            <div className="presence-indicator__dot" />
+          </div>
         </div>
-      </div>
 
-      <div className="channel-preview__content">
-        <div className="channel-preview__header">
-          <span className="channel-preview__name">
-            {otherUser.name || 'Utilisateur'}
-          </span>
-          {lastMessage && (
-            <span className="channel-preview__time">
-              {formatTime(new Date(lastMessage.created_at || Date.now()))}
+        <div className="channel-preview__content">
+          <div className="channel-preview__header">
+            <span className="channel-preview__name">
+              {isPinned && <Pin className="w-3 h-3 inline mr-1 text-pink-500" />}
+              {otherUser.name || 'Utilisateur'}
             </span>
+            {lastMessage && (
+              <span className="channel-preview__time">
+                {formatTime(new Date(lastMessage.created_at || Date.now()))}
+              </span>
+            )}
+          </div>
+
+          <div className="channel-preview__message">
+            <span className="channel-preview__text">
+              {getLastMessagePreview()}
+            </span>
+            {(unread ?? 0) > 0 && (
+              <span className="channel-preview__unread-badge">
+                {unread}
+              </span>
+            )}
+          </div>
+
+          {/* Status de présence */}
+          <div className="channel-preview__status">
+            {presence.isOnline ? (
+              <span className="text-green-600 text-xs">En ligne</span>
+            ) : presence.lastSeen ? (
+              <span className="text-gray-500 text-xs">
+                Vu {formatTime(presence.lastSeen)}
+              </span>
+            ) : null}
+          </div>
+        </div>
+      </button>
+
+      {/* Boutons d'action */}
+      {isHovered && (
+        <div className="channel-preview__actions">
+          <button
+            onClick={handlePinClick}
+            className={`channel-preview__action-btn ${isPinned ? 'channel-preview__action-btn--active' : ''}`}
+            title={isPinned ? 'Désépingler' : 'Épingler'}
+            type="button"
+          >
+            <Pin className="w-4 h-4" />
+          </button>
+          {isArchived ? (
+            <button
+              onClick={handleUnarchiveClick}
+              className="channel-preview__action-btn"
+              title="Désarchiver"
+              type="button"
+            >
+              <ArchiveRestore className="w-4 h-4" />
+            </button>
+          ) : (
+            <button
+              onClick={handleArchiveClick}
+              className="channel-preview__action-btn"
+              title="Archiver"
+              type="button"
+            >
+              <Archive className="w-4 h-4" />
+            </button>
           )}
         </div>
-
-        <div className="channel-preview__message">
-          <span className="channel-preview__text">
-            {getLastMessagePreview()}
-          </span>
-          {(unread ?? 0) > 0 && (
-            <span className="channel-preview__unread-badge">
-              {unread}
-            </span>
-          )}
-        </div>
-
-        {/* Status de présence */}
-        <div className="channel-preview__status">
-          {presence.isOnline ? (
-            <span className="text-green-600 text-xs">En ligne</span>
-          ) : presence.lastSeen ? (
-            <span className="text-gray-500 text-xs">
-              Vu {formatTime(presence.lastSeen)}
-            </span>
-          ) : null}
-        </div>
-      </div>
-    </button>
+      )}
+    </div>
   )
 })
 

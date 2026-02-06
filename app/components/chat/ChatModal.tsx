@@ -6,10 +6,9 @@
 import { Fragment, useEffect, useState } from 'react'
 import { Dialog, Transition } from '@headlessui/react'
 import { XMarkIcon } from '@heroicons/react/24/outline'
-import { 
+import {
   Chat,
   Channel,
-  ChannelList,
   MessageList,
   MessageInput,
   Window,
@@ -18,12 +17,13 @@ import {
 } from 'stream-chat-react'
 import { useStreamChat } from '@/hooks/useStreamChat'
 import { useSession } from 'next-auth/react'
-import { CustomChannelPreview } from './CustomChannelPreview'
 import { CustomMessage } from './CustomMessage'
 import { CustomAttachment } from './CustomAttachment'
-import { EmptyStateIndicator } from './EmptyStateIndicator'
 import { CustomEmojiPicker } from './EmojiPickerWrapper'
+import { ChannelListWithTabs } from './ChannelListWithTabs'
+import { FileUploadValidator } from './FileUploadValidator'
 import { encodeToMp3 } from 'stream-chat-react/mp3-encoder'
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable'
 
 interface ChatModalProps {
   isOpen: boolean
@@ -155,75 +155,109 @@ export function ChatModal({ isOpen, onClose, channelId, targetUserName, isCreati
                   </div>
                 ) : (
                   <div className="h-[80vh]">
+                    <FileUploadValidator />
                     <Chat client={client}>
-                      <div className="flex h-full bg-white rounded-lg overflow-hidden">
-                        {/* Liste des conversations */}
-                        <div className={`${isMobile && selectedChannel ? 'hidden' : 'flex'} flex-col w-full md:w-80 border-r border-gray-200`}>
-                          <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gray-50">
-                            <h2 className="text-lg font-semibold text-gray-900">
-                              {targetUserName ? `Chat avec ${targetUserName}` : 'Messages'}
-                            </h2>
-                            <button
-                              onClick={onClose}
-                              className="p-1 hover:bg-gray-200 rounded-full transition-colors"
-                            >
-                              <XMarkIcon className="w-5 h-5 text-gray-600" />
-                            </button>
+                      {isMobile ? (
+                        /* Layout mobile sans redimensionnement */
+                        <div className="flex h-full bg-white rounded-lg overflow-hidden">
+                          <div className={`${selectedChannel ? 'hidden' : 'flex'} flex-col w-full`}>
+                            <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gray-50">
+                              <h2 className="text-lg font-semibold text-gray-900">
+                                {targetUserName ? `Chat avec ${targetUserName}` : 'Messages'}
+                              </h2>
+                              <button
+                                onClick={onClose}
+                                className="p-1 hover:bg-gray-200 rounded-full transition-colors"
+                              >
+                                <XMarkIcon className="w-5 h-5 text-gray-600" />
+                              </button>
+                            </div>
+                            <div className="flex-1 overflow-hidden">
+                              {session?.user?.id && (
+                                <ChannelListWithTabs
+                                  userId={session.user.id}
+                                  onChannelSelect={(channel: any) => setSelectedChannel(channel)}
+                                />
+                              )}
+                            </div>
                           </div>
-
-                          <div className="flex-1 overflow-hidden">
-                            {session?.user?.id && (
-                              <ChannelList
-                                filters={{
-                                  members: { $in: [session.user.id] },
-                                  ...(channelId && { id: channelId })
-                                }}
-                                sort={{ last_message_at: -1 }}
-                                options={{ limit: 10 }}
-                                Preview={(props) => (
-                                  <CustomChannelPreview
-                                    {...props}
-                                    setActiveChannel={(channel: any) => setSelectedChannel(channel)}
-                                  />
-                                )}
-                                EmptyStateIndicator={EmptyStateIndicator}
-                              />
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Zone de conversation */}
-                        <div className={`${isMobile && !selectedChannel ? 'hidden' : 'flex'} flex-1 flex-col min-w-0`}>
-                          {selectedChannel ? (
-                            <Channel channel={selectedChannel} Message={CustomMessage} Attachment={CustomAttachment} EmojiPicker={CustomEmojiPicker}>
-                              <Window>
-                                <ChannelHeader />
-                                <MessageList messageActions={['edit', 'delete', 'flag', 'pin', 'markUnread', 'react']} />
-                                <MessageInput audioRecordingEnabled audioRecordingConfig={{ transcoderConfig: { encoder: encodeToMp3 } }} />
-                              </Window>
-                            </Channel>
-                          ) : (
-                            <div className="hidden md:flex flex-1 items-center justify-center bg-gray-50">
-                              <div className="text-center">
-                                <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
-                                  <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                                  </svg>
-                                </div>
-                                <h3 className="text-lg font-medium text-gray-900 mb-2">
-                                  Sélectionnez une conversation
-                                </h3>
-                                <p className="text-gray-500">
-                                  {targetUserName ? 
-                                    `Votre conversation avec ${targetUserName} va s'ouvrir` :
-                                    'Choisissez une conversation dans la liste'
-                                  }
-                                </p>
-                              </div>
+                          {selectedChannel && (
+                            <div className="flex flex-1 flex-col">
+                              <Channel channel={selectedChannel} Message={CustomMessage} Attachment={CustomAttachment} EmojiPicker={CustomEmojiPicker}>
+                                <Window>
+                                  <ChannelHeader />
+                                  <MessageList messageActions={['edit', 'delete', 'flag', 'pin', 'markUnread', 'react']} />
+                                  <MessageInput audioRecordingEnabled audioRecordingConfig={{ transcoderConfig: { encoder: encodeToMp3 } }} />
+                                </Window>
+                              </Channel>
                             </div>
                           )}
                         </div>
-                      </div>
+                      ) : (
+                        /* Layout desktop avec panneaux redimensionnables */
+                        <ResizablePanelGroup direction="horizontal" className="h-full bg-white rounded-lg overflow-hidden">
+                          {/* Liste des conversations */}
+                          <ResizablePanel defaultSize={30} minSize={20} maxSize={50}>
+                            <div className="flex flex-col h-full border-r border-gray-200">
+                              <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gray-50">
+                                <h2 className="text-lg font-semibold text-gray-900">
+                                  {targetUserName ? `Chat avec ${targetUserName}` : 'Messages'}
+                                </h2>
+                                <button
+                                  onClick={onClose}
+                                  className="p-1 hover:bg-gray-200 rounded-full transition-colors"
+                                >
+                                  <XMarkIcon className="w-5 h-5 text-gray-600" />
+                                </button>
+                              </div>
+                              <div className="flex-1 overflow-hidden">
+                                {session?.user?.id && (
+                                  <ChannelListWithTabs
+                                    userId={session.user.id}
+                                    onChannelSelect={(channel: any) => setSelectedChannel(channel)}
+                                  />
+                                )}
+                              </div>
+                            </div>
+                          </ResizablePanel>
+
+                          <ResizableHandle withHandle />
+
+                          {/* Zone de conversation */}
+                          <ResizablePanel defaultSize={70}>
+                            <div className="flex flex-col h-full">
+                              {selectedChannel ? (
+                                <Channel channel={selectedChannel} Message={CustomMessage} Attachment={CustomAttachment} EmojiPicker={CustomEmojiPicker}>
+                                  <Window>
+                                    <ChannelHeader />
+                                    <MessageList messageActions={['edit', 'delete', 'flag', 'pin', 'markUnread', 'react']} />
+                                    <MessageInput audioRecordingEnabled audioRecordingConfig={{ transcoderConfig: { encoder: encodeToMp3 } }} />
+                                  </Window>
+                                </Channel>
+                              ) : (
+                                <div className="flex flex-1 items-center justify-center bg-gray-50">
+                                  <div className="text-center">
+                                    <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
+                                      <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                      </svg>
+                                    </div>
+                                    <h3 className="text-lg font-medium text-gray-900 mb-2">
+                                      Sélectionnez une conversation
+                                    </h3>
+                                    <p className="text-gray-500">
+                                      {targetUserName ?
+                                        `Votre conversation avec ${targetUserName} va s'ouvrir` :
+                                        'Choisissez une conversation dans la liste'
+                                      }
+                                    </p>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </ResizablePanel>
+                        </ResizablePanelGroup>
+                      )}
                     </Chat>
                   </div>
                 )}

@@ -27,6 +27,7 @@ import {
   Ban,
   Clock,
   Crown,
+  Key,
   Mail,
   MapPin,
   Shield,
@@ -35,6 +36,7 @@ import {
   AlertTriangle,
   CheckCircle
 } from 'lucide-react'
+import { Input } from '@/components/ui/input'
 import { formatDistanceToNow, format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 
@@ -56,6 +58,7 @@ interface UserDetail {
   suspensionReason: string | null
   suspendedAt: string | null
   suspendedUntil: string | null
+  emailVerified: string | null
   photos: Array<{
     id: string
     url: string
@@ -85,7 +88,7 @@ interface UserDetail {
   }>
 }
 
-type ActionType = 'suspend' | 'ban' | 'unban' | 'delete' | 'changeRole'
+type ActionType = 'suspend' | 'ban' | 'unban' | 'delete' | 'changeRole' | 'resetPassword' | 'verifyEmail'
 
 const statusColors: Record<string, string> = {
   ACTIVE: 'bg-green-100 text-green-800',
@@ -106,6 +109,7 @@ export default function UserDetailPage() {
   const [reason, setReason] = useState('')
   const [duration, setDuration] = useState('7')
   const [newRole, setNewRole] = useState('')
+  const [newPassword, setNewPassword] = useState('')
 
   const fetchUser = async () => {
     try {
@@ -128,6 +132,7 @@ export default function UserDetailPage() {
   const openActionDialog = (action: ActionType) => {
     setCurrentAction(action)
     setReason('')
+    setNewPassword('')
     setDialogOpen(true)
   }
 
@@ -139,6 +144,7 @@ export default function UserDetailPage() {
       const body: any = { action: currentAction, reason }
       if (currentAction === 'suspend') body.duration = parseInt(duration)
       if (currentAction === 'changeRole') body.newRole = newRole
+      if (currentAction === 'resetPassword') body.newPassword = newPassword
 
       const method = currentAction === 'delete' ? 'DELETE' : 'PATCH'
       const res = await fetch(`/api/admin/users/${params.id}`, {
@@ -308,6 +314,24 @@ export default function UserDetailPage() {
               <Shield className="h-4 w-4 mr-2" />
               Changer le role ({user.role})
             </Button>
+            {!user.emailVerified && (
+              <Button
+                variant="outline"
+                className="w-full justify-start text-blue-600"
+                onClick={() => openActionDialog('verifyEmail')}
+              >
+                <Mail className="h-4 w-4 mr-2" />
+                Vérifier l'email manuellement
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              className="w-full justify-start text-orange-600"
+              onClick={() => openActionDialog('resetPassword')}
+            >
+              <Key className="h-4 w-4 mr-2" />
+              Réinitialiser le mot de passe
+            </Button>
             <Button
               variant="destructive"
               className="w-full justify-start"
@@ -394,9 +418,13 @@ export default function UserDetailPage() {
               {currentAction === 'unban' && 'Reactiver l\'utilisateur'}
               {currentAction === 'delete' && 'Supprimer l\'utilisateur'}
               {currentAction === 'changeRole' && 'Changer le role'}
+              {currentAction === 'resetPassword' && 'Réinitialiser le mot de passe'}
+              {currentAction === 'verifyEmail' && 'Vérifier l\'email manuellement'}
             </DialogTitle>
             <DialogDescription>
               {currentAction === 'delete' && 'Cette action est irreversible.'}
+              {currentAction === 'resetPassword' && `Définir un nouveau mot de passe pour ${user.email}`}
+              {currentAction === 'verifyEmail' && `Marquer l'email ${user.email} comme vérifié. L'utilisateur pourra se connecter.`}
             </DialogDescription>
           </DialogHeader>
 
@@ -429,7 +457,23 @@ export default function UserDetailPage() {
               </Select>
             )}
 
-            {currentAction !== 'changeRole' && (
+            {currentAction === 'resetPassword' && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Nouveau mot de passe</label>
+                <Input
+                  type="text"
+                  placeholder="Minimum 6 caractères"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  minLength={6}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Le mot de passe sera visible ici pour que vous puissiez le communiquer à l'utilisateur.
+                </p>
+              </div>
+            )}
+
+            {currentAction !== 'changeRole' && currentAction !== 'resetPassword' && currentAction !== 'verifyEmail' && (
               <Textarea
                 placeholder="Raison (optionnel)"
                 value={reason}

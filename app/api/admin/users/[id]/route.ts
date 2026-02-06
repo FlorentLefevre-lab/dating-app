@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db'
 import { verifyAdminAccess, canModifyUser } from '@/lib/admin/auth'
 import { logAdminAction } from '@/lib/admin/logging'
 import { AccountStatus, UserRole, AdminActionType } from '@prisma/client'
+import bcrypt from 'bcryptjs'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -115,7 +116,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params
     const body = await request.json()
-    const { action, reason, duration, newRole } = body
+    const { action, reason, duration, newRole, newPassword } = body
 
     // Recuperer l'utilisateur cible
     const targetUser = await prisma.user.findUnique({
@@ -197,6 +198,39 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         details.newRole = newRole
         break
 
+      case 'resetPassword':
+        if (!newPassword || newPassword.length < 6) {
+          return NextResponse.json(
+            { error: 'Le mot de passe doit contenir au moins 6 caractères' },
+            { status: 400 }
+          )
+        }
+        // Seul un admin peut réinitialiser les mots de passe
+        if (authResult.role !== 'ADMIN') {
+          return NextResponse.json(
+            { error: 'Seul un admin peut réinitialiser les mots de passe' },
+            { status: 403 }
+          )
+        }
+        const hashedPassword = await bcrypt.hash(newPassword, 12)
+        updateData = { hashedPassword }
+        actionType = 'PASSWORD_RESET'
+        details.resetBy = 'admin'
+        break
+
+      case 'verifyEmail':
+        // Seul un admin peut vérifier manuellement un email
+        if (authResult.role !== 'ADMIN') {
+          return NextResponse.json(
+            { error: 'Seul un admin peut vérifier manuellement un email' },
+            { status: 403 }
+          )
+        }
+        updateData = { emailVerified: new Date() }
+        actionType = 'EMAIL_VERIFIED'
+        details.verifiedBy = 'admin'
+        break
+
       default:
         return NextResponse.json(
           { error: 'Action non reconnue' },
@@ -214,6 +248,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         name: true,
         accountStatus: true,
         role: true,
+        emailVerified: true,
         suspensionReason: true,
         suspendedAt: true,
         suspendedUntil: true,
