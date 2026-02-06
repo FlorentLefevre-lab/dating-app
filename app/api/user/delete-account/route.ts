@@ -143,6 +143,61 @@ export async function DELETE(request: NextRequest) {
         console.log('[DELETE-ACCOUNT] Profile views deletion skipped');
       }
 
+      // Delete matches (user can be user1 or user2)
+      try {
+        await tx.match.deleteMany({
+          where: {
+            OR: [
+              { user1Id: userId },
+              { user2Id: userId }
+            ]
+          }
+        });
+      } catch (e) {
+        console.log('[DELETE-ACCOUNT] Matches deletion skipped');
+      }
+
+      // Delete daily stats
+      try {
+        await tx.dailyStats.deleteMany({
+          where: { userId }
+        });
+      } catch (e) {
+        console.log('[DELETE-ACCOUNT] Daily stats deletion skipped');
+      }
+
+      // Delete ticket messages
+      try {
+        await tx.ticketMessage.deleteMany({
+          where: { userId }
+        });
+      } catch (e) {
+        console.log('[DELETE-ACCOUNT] Ticket messages deletion skipped');
+      }
+
+      // Delete support tickets
+      try {
+        await tx.supportTicket.deleteMany({
+          where: { userId }
+        });
+      } catch (e) {
+        console.log('[DELETE-ACCOUNT] Support tickets deletion skipped');
+      }
+
+      // Delete reports (as reporter or target)
+      try {
+        await tx.report.deleteMany({
+          where: {
+            OR: [
+              { reporterId: userId },
+              { targetUserId: userId }
+            ]
+          }
+        });
+      } catch (e) {
+        console.log('[DELETE-ACCOUNT] Reports deletion skipped');
+      }
+
       // Delete photos
       try {
         await tx.photo.deleteMany({
