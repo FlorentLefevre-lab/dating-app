@@ -46,6 +46,8 @@ async function getTransporter(): Promise<Transporter> {
     // Resolve hostname to IPv4 to avoid IPv6 timeout issues
     const resolvedHost = await resolveHostToIPv4(smtpHost);
 
+    console.log(`[EMAIL] Creating SMTP transporter: ${smtpHost} -> ${resolvedHost}:${port}`);
+
     _transporter = createTransport({
       host: resolvedHost,
       port: port,
@@ -63,6 +65,14 @@ async function getTransporter(): Promise<Transporter> {
     });
   }
   return _transporter;
+}
+
+// Force transporter recreation (useful after config changes)
+export function resetTransporter(): void {
+  _transporter = null;
+  _resolvedHost = null;
+  _resolvedHostname = null;
+  console.log('[EMAIL] Transporter reset');
 }
 
 // ==========================================

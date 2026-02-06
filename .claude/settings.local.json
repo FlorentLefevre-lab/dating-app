@@ -40,7 +40,11 @@
       "Bash(git rm:*)",
       "Bash(node scripts/test-smtp.js:*)",
       "WebFetch(domain:getstream.io)",
-      "Bash(npm ls:*)"
+      "Bash(npm ls:*)",
+      "Bash(node scripts/diagnose-email.js:*)",
+      "Bash(node scripts/check-user-by-id.js:*)",
+      "Bash(nslookup:*)",
+      "Bash(node scripts/test-smtp-ipv4.js:*)"
     ]
   }
 }
