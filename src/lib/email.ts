@@ -28,6 +28,8 @@ function getTransporter(): Transporter {
       },
       connectionTimeout: 30000,
       greetingTimeout: 15000,
+      // Force IPv4 to avoid IPv6 timeout issues with some SMTP servers
+      family: 4,
     });
   }
   return _transporter;
@@ -329,6 +331,8 @@ export async function validatePasswordResetToken(email: string, token: string): 
  * - Rate limited to 5 requests per email per hour
  */
 export async function sendEmailVerification(email: string): Promise<EmailResult> {
+  console.log('[Email] sendEmailVerification called for:', email);
+
   // Validate email format
   if (!isValidEmail(email)) {
     console.warn('[Email] Invalid email format attempted for verification');
@@ -338,6 +342,7 @@ export async function sendEmailVerification(email: string): Promise<EmailResult>
   const normalizedEmail = email.toLowerCase().trim();
 
   // Check rate limit (5 per hour for verification)
+  console.log('[Email] Checking rate limit...');
   const rateLimit = await checkRateLimit(normalizedEmail, 'verify', 5, 3600);
   if (!rateLimit.allowed) {
     console.warn(`[Email] Rate limit exceeded for email verification: ${sanitizeEmailForLog(normalizedEmail)}`);
@@ -346,15 +351,19 @@ export async function sendEmailVerification(email: string): Promise<EmailResult>
       error: `Trop de demandes. Reessayez dans ${Math.ceil(rateLimit.resetInSeconds / 60)} minutes.`
     };
   }
+  console.log('[Email] Rate limit OK, remaining:', rateLimit.remaining);
 
   // Generate secure token
   const token = generateSecureToken();
   const hashedToken = hashToken(token);
+  console.log('[Email] Token generated');
 
   try {
     const redis = getRedisClient();
+    console.log('[Email] Redis client obtained, status:', redis.status);
 
     // Store hashed token in Redis with 24 hour expiration
+    console.log('[Email] Storing token in Redis...');
     await redis.setex(
       `email-verify:${hashedToken}`,
       24 * 60 * 60, // 24 hours
@@ -363,6 +372,7 @@ export async function sendEmailVerification(email: string): Promise<EmailResult>
         createdAt: Date.now()
       })
     );
+    console.log('[Email] Token stored in Redis successfully');
 
     // Build verification URL
     const verifyUrl = `${process.env.NEXTAUTH_URL}/auth/verify-email?token=${token}&email=${encodeURIComponent(normalizedEmail)}`;
@@ -428,6 +438,7 @@ export async function sendEmailVerification(email: string): Promise<EmailResult>
       `,
     };
 
+    console.log('[Email] Sending email via SMTP...');
     await getTransporter().sendMail(mailOptions);
 
     // Log success without exposing sensitive data
@@ -435,7 +446,14 @@ export async function sendEmailVerification(email: string): Promise<EmailResult>
 
     return { success: true, message: 'Email de verification envoye avec succes' };
   } catch (error) {
-    console.error('[Email] Failed to send verification email:', error instanceof Error ? error.message : 'Unknown error');
+    console.error('[Email] Failed to send verification email:', error);
+    console.error('[Email] SMTP Config:', {
+      host: process.env.SMTP_HOST || 'MISSING',
+      port: process.env.SMTP_PORT || 'MISSING',
+      user: process.env.SMTP_USER || 'MISSING',
+      pass: process.env.SMTP_PASS ? '***SET***' : 'MISSING',
+      from: process.env.SMTP_FROM || 'MISSING',
+    });
     return { success: false, error: 'Erreur lors de l\'envoi de l\'email. Veuillez reessayer.' };
   }
 }

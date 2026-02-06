@@ -48,9 +48,13 @@ async function handleResetPassword(request: NextRequest) {
     const hashedPassword = await bcrypt.hash(password, 12)
 
     // Mettre à jour le mot de passe de l'utilisateur
+    // Et marquer l'email comme vérifié (l'utilisateur a prouvé qu'il possède cette adresse)
     await prisma.user.update({
       where: { id: user.id },
-      data: { hashedPassword }
+      data: {
+        hashedPassword,
+        emailVerified: user.emailVerified || new Date()
+      }
     })
 
     console.log('[ResetPassword] Mot de passe réinitialisé pour:', email)

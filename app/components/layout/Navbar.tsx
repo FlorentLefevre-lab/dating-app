@@ -130,6 +130,7 @@ export default function Navbar() {
     '/auth/register',
     '/auth/error',
     '/auth/verify-email',
+    '/auth/onboarding',
   ]
 
   const shouldHideNavbar =
@@ -140,12 +141,20 @@ export default function Navbar() {
     return null
   }
 
+  // RIEN pendant le chargement - attendre que la session soit complètement chargée
+  if (status === 'loading') {
+    return null
+  }
+
   if (status === 'unauthenticated') {
     return null
   }
 
-  // Afficher un placeholder pendant le chargement
-  if (status === 'loading') {
+  // La navbar s'affiche uniquement si:
+  // 1. Session chargée (status === 'authenticated')
+  // 2. Onboarding complété (onboardingCompleted === true)
+  // Note: Le placeholder de chargement a été supprimé pour éviter le flash
+  if (false) { // Code désactivé - ancien placeholder
     return (
       <nav className="bg-white border-b border-gray-200 px-6 py-4 sticky top-0 z-50 shadow-sm">
         <div className="max-w-7xl mx-auto flex-between">
