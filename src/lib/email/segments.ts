@@ -436,7 +436,7 @@ export async function updateSegmentCachedCount(segmentId: string): Promise<numbe
       throw new Error(`Segment not found: ${segmentId}`);
     }
 
-    const conditions = segment.conditions as SegmentConditions;
+    const conditions = segment.conditions as unknown as SegmentConditions;
     const count = await countSegmentUsers(conditions);
 
     await prisma.emailSegment.update({
@@ -473,7 +473,7 @@ export async function getSegmentUsersById(
     throw new Error(`Segment not found: ${segmentId}`);
   }
 
-  const conditions = segment.conditions as SegmentConditions;
+  const conditions = segment.conditions as unknown as SegmentConditions;
   return getSegmentUsers(conditions, options);
 }
 
@@ -514,7 +514,7 @@ export async function getCampaignRecipients(
   excludeUserIds = [...new Set([...excludeUserIds, ...existingUserIds])];
 
   // Get segment users
-  const conditions = campaign.segment.conditions as SegmentConditions;
+  const conditions = campaign.segment.conditions as unknown as SegmentConditions;
   return getSegmentUsers(conditions, { excludeUserIds });
 }
 

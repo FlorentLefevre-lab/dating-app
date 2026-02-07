@@ -44,7 +44,12 @@
       "Bash(node scripts/diagnose-email.js:*)",
       "Bash(node scripts/check-user-by-id.js:*)",
       "Bash(nslookup:*)",
-      "Bash(node scripts/test-smtp-ipv4.js:*)"
+      "Bash(node scripts/test-smtp-ipv4.js:*)",
+      "Bash(dir /b \"C:\\\\Users\\\\flore\\\\.claude\\\\teams\\\\email-marketing-impl\"\")",
+      "Bash(dir /s /b C:developementFlowDatingdating-appappapiadminemail-marketing)",
+      "Bash(dir:*)",
+      "Bash(powershell:*)",
+      "Bash(cmd /c \"npx prisma generate\")"
     ]
   }
 }

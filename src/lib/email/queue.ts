@@ -521,3 +521,76 @@ export async function extendLock(
     return false;
   }
 }
+
+/**
+ * Pause a campaign - sets a pause flag that workers check
+ */
+export async function pauseCampaign(campaignId: string): Promise<void> {
+  const redis = getRedisClient();
+  const key = `${KEYS.progress(campaignId)}:paused`;
+
+  try {
+    await redis.set(key, '1');
+    console.log(`[EmailQueue] Campaign ${campaignId} paused`);
+  } catch (error) {
+    console.error('[EmailQueue] Failed to pause campaign:', error);
+    throw error;
+  }
+}
+
+/**
+ * Resume a paused campaign
+ */
+export async function resumeCampaign(campaignId: string): Promise<void> {
+  const redis = getRedisClient();
+  const key = `${KEYS.progress(campaignId)}:paused`;
+
+  try {
+    await redis.del(key);
+    console.log(`[EmailQueue] Campaign ${campaignId} resumed`);
+  } catch (error) {
+    console.error('[EmailQueue] Failed to resume campaign:', error);
+    throw error;
+  }
+}
+
+/**
+ * Check if a campaign is paused
+ */
+export async function isCampaignPaused(campaignId: string): Promise<boolean> {
+  const redis = getRedisClient();
+  const key = `${KEYS.progress(campaignId)}:paused`;
+
+  try {
+    const result = await redis.get(key);
+    return result === '1';
+  } catch (error) {
+    console.error('[EmailQueue] Failed to check pause status:', error);
+    return false;
+  }
+}
+
+/**
+ * Cancel a campaign - clears the queue and marks as cancelled
+ */
+export async function cancelCampaign(campaignId: string): Promise<void> {
+  const redis = getRedisClient();
+
+  try {
+    // Clear the pending queue
+    await clearCampaignQueue(campaignId);
+
+    // Set cancelled flag
+    const cancelKey = `${KEYS.progress(campaignId)}:cancelled`;
+    await redis.set(cancelKey, '1');
+
+    // Remove pause flag if set
+    const pauseKey = `${KEYS.progress(campaignId)}:paused`;
+    await redis.del(pauseKey);
+
+    console.log(`[EmailQueue] Campaign ${campaignId} cancelled`);
+  } catch (error) {
+    console.error('[EmailQueue] Failed to cancel campaign:', error);
+    throw error;
+  }
+}
